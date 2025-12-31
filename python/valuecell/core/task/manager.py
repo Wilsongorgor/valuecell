@@ -1,84 +1,95 @@
+import asyncio
 from datetime import datetime
-from typing import Dict
+from typing import Optional
 
 from .models import Task, TaskStatus
+from .task_store import InMemoryTaskStore, TaskStore
 
 
 class TaskManager:
-    """Lightweight in-memory task manager.
+    """Lightweight task manager with pluggable storage backend.
 
-    Simplified to remove pluggable stores. If persistence is needed later,
-    a thin adapter can wrap these methods.
+    Defaults to in-memory storage for backward compatibility. Pass a TaskStore
+    implementation (e.g., SQLiteTaskStore) for persistent storage.
     """
 
-    def __init__(self):
-        # In-memory store keyed by task_id
-        self._tasks: Dict[str, Task] = {}
+    def __init__(self, store: Optional[TaskStore] = None):
+        # Use provided store or default to in-memory
+        self._store = store or InMemoryTaskStore()
+        # Process-local concurrency guard; protects in-memory state
+        self._lock = asyncio.Lock()
 
     # ---- basic registration ----
 
     async def update_task(self, task: Task) -> None:
         """Update task"""
-        task.updated_at = datetime.now()
-        self._tasks[task.task_id] = task
+        async with self._lock:
+            # Explicit updates should refresh updated_at
+            task.updated_at = datetime.now()
+            await self._store.save_task(task)
 
     # ---- internal helpers ----
-    def _get_task(self, task_id: str) -> Task | None:
-        return self._tasks.get(task_id)
+    async def _get_task(self, task_id: str) -> Task | None:
+        return await self._store.load_task(task_id)
 
     # Task status management
     async def start_task(self, task_id: str) -> bool:
         """Start task execution"""
-        task = self._get_task(task_id)
-        if not task or task.status != TaskStatus.PENDING:
-            return False
+        async with self._lock:
+            task = await self._get_task(task_id)
+            if not task or task.status != TaskStatus.PENDING:
+                return False
 
-        task.start_task()
-        await self.update_task(task)
-        return True
+            task.start()
+            await self._store.save_task(task)
+            return True
 
     async def complete_task(self, task_id: str) -> bool:
         """Complete task"""
-        task = self._get_task(task_id)
-        if not task or task.is_finished():
-            return False
+        async with self._lock:
+            task = await self._get_task(task_id)
+            if not task or task.is_finished():
+                return False
 
-        task.complete_task()
-        await self.update_task(task)
-        return True
+            task.complete()
+            await self._store.save_task(task)
+            return True
 
     async def fail_task(self, task_id: str, error_message: str) -> bool:
         """Mark task as failed"""
-        task = self._get_task(task_id)
-        if not task or task.is_finished():
-            return False
+        async with self._lock:
+            task = await self._get_task(task_id)
+            if not task or task.is_finished():
+                return False
 
-        task.fail_task(error_message)
-        await self.update_task(task)
-        return True
+            task.fail(error_message)
+            await self._store.save_task(task)
+            return True
 
     async def cancel_task(self, task_id: str) -> bool:
         """Cancel task"""
-        task = self._get_task(task_id)
-        if not task or task.is_finished():
-            return False
+        async with self._lock:
+            task = await self._get_task(task_id)
+            if not task:
+                return False
+            if task.is_finished():
+                return True
 
-        task.cancel_task()
-        await self.update_task(task)
-        return True
+            task.cancel()
+            await self._store.save_task(task)
+            return True
 
     # Batch operations
     async def cancel_conversation_tasks(self, conversation_id: str) -> int:
         """Cancel all unfinished tasks in a conversation"""
-        tasks = [
-            t for t in self._tasks.values() if t.conversation_id == conversation_id
-        ]
-        cancelled_count = 0
+        async with self._lock:
+            tasks = await self._store.list_tasks(conversation_id=conversation_id)
+            cancelled_count = 0
 
-        for task in tasks:
-            if not task.is_finished():
-                task.cancel_task()
-                await self.update_task(task)
-                cancelled_count += 1
+            for task in tasks:
+                if not task.is_finished():
+                    task.cancel()
+                    await self._store.save_task(task)
+                    cancelled_count += 1
 
-        return cancelled_count
+            return cancelled_count

@@ -2,7 +2,9 @@
 
 import os
 from functools import lru_cache
-from pathlib import Path
+
+from valuecell.config.constants import PROJECT_ROOT
+from valuecell.utils.env import get_system_env_dir
 
 
 def _get_project_root() -> str:
@@ -17,9 +19,15 @@ def _get_project_root() -> str:
 
 
 def _default_db_path() -> str:
-    """Get default database path in project root."""
-    repo_root = _get_project_root()
-    return f"sqlite:///{os.path.join(repo_root, 'valuecell.db')}"
+    """Get default database DSN under the system application directory.
+
+    Mirrors `.env` location so the SQLite file lives alongside user-level config:
+    - macOS: `~/Library/Application Support/ValueCell/valuecell.db`
+    - Linux: `~/.config/valuecell/valuecell.db`
+    - Windows: `%APPDATA%\ValueCell\valuecell.db`
+    """
+    system_dir = get_system_env_dir()
+    return f"sqlite:///{os.path.join(str(system_dir), 'valuecell.db')}"
 
 
 class Settings:
@@ -42,10 +50,16 @@ class Settings:
         self.CORS_ORIGINS = cors_origins.split(",") if cors_origins != "*" else ["*"]
 
         # Database Configuration
-        self.DATABASE_URL = os.getenv("VALUECELL_SQLITE_DB", _default_db_path())
+        # Prefer `VALUECELL_DATABASE_URL` if provided; otherwise use system application directory default.
+        env_db = os.getenv("VALUECELL_DATABASE_URL")
+        if env_db:
+            # If it's already a full DSN (sqlite or other), use as-is
+            self.DATABASE_URL = env_db
+        else:
+            self.DATABASE_URL = _default_db_path()
 
         # File Paths
-        self.BASE_DIR = Path(__file__).parent.parent.parent
+        self.BASE_DIR = PROJECT_ROOT
         self.LOGS_DIR = self.BASE_DIR / "logs"
         self.LOGS_DIR.mkdir(exist_ok=True)
 

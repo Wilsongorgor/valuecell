@@ -25,16 +25,23 @@ from a2a.types import (
     TextPart,
 )
 
-from valuecell.core.coordinate.models import ExecutionPlan
+from valuecell.core.agent.connect import RemoteConnections
+from valuecell.core.conversation import ConversationStatus
+from valuecell.core.conversation.service import ConversationService
 from valuecell.core.coordinate.orchestrator import AgentOrchestrator
-from valuecell.core.coordinate.super_agent import (
+from valuecell.core.event.service import EventResponseService
+from valuecell.core.plan.models import ExecutionPlan
+from valuecell.core.plan.service import PlanService
+from valuecell.core.super_agent import (
     SuperAgentDecision,
     SuperAgentOutcome,
+    SuperAgentService,
 )
-from valuecell.core.conversation import ConversationStatus
-from valuecell.core.task import Task, TaskStatus as CoreTaskStatus
+from valuecell.core.task import TaskStatus as CoreTaskStatus
+from valuecell.core.task.executor import TaskExecutor
+from valuecell.core.task.models import Task
+from valuecell.core.task.service import TaskService
 from valuecell.core.types import UserInput, UserInputMetadata
-
 
 # -------------------------
 # Fixtures
@@ -75,6 +82,7 @@ def _sample_task(conversation_id: str, user_id: str, sample_query: str) -> Task:
         user_id=user_id,
         agent_name="TestAgent",
         query=sample_query,
+        title="Auto Title",
         status=CoreTaskStatus.PENDING,
         remote_task_ids=[],
     )
@@ -94,9 +102,11 @@ def _sample_plan(
     )
 
 
-def _stub_conversation(status: Any = ConversationStatus.ACTIVE):
+def _stub_conversation(
+    status: Any = ConversationStatus.ACTIVE, title: str | None = None
+):
     # Minimal conversation stub with status and basic methods used by orchestrator
-    s = SimpleNamespace(status=status)
+    s = SimpleNamespace(status=status, title=title)
 
     def activate():
         s.status = ConversationStatus.ACTIVE
@@ -113,7 +123,8 @@ def _stub_conversation(status: Any = ConversationStatus.ACTIVE):
 def _mock_conversation_manager() -> Mock:
     m = Mock()
     m.add_item = AsyncMock()
-    m.create_conversation = AsyncMock(return_value="new-conversation-id")
+    # Return a stub conversation object (not just an ID) so title logic works
+    m.create_conversation = AsyncMock(return_value=_stub_conversation(title=None))
     m.get_conversation_items = AsyncMock(return_value=[])
     m.list_user_conversations = AsyncMock(return_value=[])
     m.get_conversation = AsyncMock(return_value=_stub_conversation())
@@ -178,13 +189,65 @@ def _mock_planner(sample_plan: ExecutionPlan) -> Mock:
 
 @pytest.fixture(name="orchestrator")
 def _orchestrator(
-    mock_conversation_manager: Mock, mock_task_manager: Mock, mock_planner: Mock
+    mock_conversation_manager: Mock,
+    mock_task_manager: Mock,
+    mock_planner: Mock,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> AgentOrchestrator:
-    o = AgentOrchestrator()
-    o.conversation_manager = mock_conversation_manager
-    o.task_manager = mock_task_manager
-    o.planner = mock_planner
-    return o
+    # Mock create_model at factory level to avoid API key validation in CI
+    import valuecell.adapters.models.factory as factory_mod
+
+    monkeypatch.setattr(
+        factory_mod, "create_model", lambda *args, **kwargs: "stub-model"
+    )
+    monkeypatch.setattr(
+        factory_mod, "create_embedder", lambda *args, **kwargs: "stub-embedder"
+    )
+
+    agent_connections = Mock(spec=RemoteConnections)
+    agent_connections.get_client = AsyncMock()
+    agent_connections.start_agent = AsyncMock()
+    # Ensure passthrough detection returns False so tests relying on planner output remain stable
+    agent_connections.is_planner_passthrough = Mock(return_value=False)
+
+    conversation_service = ConversationService(manager=mock_conversation_manager)
+    event_service = EventResponseService(conversation_service=conversation_service)
+    task_service = TaskService(manager=mock_task_manager)
+    plan_service = PlanService(
+        agent_connections=agent_connections, execution_planner=mock_planner
+    )
+
+    # Create mock SuperAgent to avoid real model initialization
+    mock_super_agent = Mock()
+    mock_super_agent.name = "ValueCellAgent"
+    mock_super_agent.run = AsyncMock()
+    super_agent_service = SuperAgentService(super_agent=mock_super_agent)
+
+    task_executor = TaskExecutor(
+        agent_connections=agent_connections,
+        task_service=task_service,
+        event_service=event_service,
+        conversation_service=conversation_service,
+    )
+
+    bundle = SimpleNamespace(
+        agent_connections=agent_connections,
+        conversation_service=conversation_service,
+        event_service=event_service,
+        task_service=task_service,
+        plan_service=plan_service,
+        super_agent_service=super_agent_service,
+        task_executor=task_executor,
+    )
+
+    monkeypatch.setattr(
+        "valuecell.core.coordinate.orchestrator.AgentServiceBundle.compose",
+        Mock(return_value=bundle),
+    )
+
+    orchestrator = AgentOrchestrator()
+    orchestrator._testing_bundle = bundle  # type: ignore[attr-defined]
+    return orchestrator
 
 
 # -------------------------
@@ -249,13 +312,12 @@ async def test_happy_path_streaming(
     mock_agent_client: Mock,
     mock_agent_card_streaming: AgentCard,
     sample_user_input: UserInput,
+    mock_task_manager: Mock,
 ):
-    # Inject agent connections mock
-    ac = Mock()
-    ac.start_agent = AsyncMock(return_value=mock_agent_card_streaming)
-    ac.get_client = AsyncMock(return_value=mock_agent_client)
-    ac.stop_all = AsyncMock()
-    orchestrator.agent_connections = ac
+    bundle = orchestrator._testing_bundle  # type: ignore[attr-defined]
+    bundle.agent_connections.start_agent.return_value = mock_agent_card_streaming
+    bundle.agent_connections.get_client.return_value = mock_agent_client
+    bundle.agent_connections.stop_all = AsyncMock()
 
     mock_agent_client.send_message.return_value = _make_streaming_response(
         ["Hello", " World"]
@@ -267,13 +329,106 @@ async def test_happy_path_streaming(
         out.append(chunk)
 
     # Minimal assertions
-    orchestrator.task_manager.update_task.assert_called_once()
-    orchestrator.task_manager.start_task.assert_called_once()
-    ac.start_agent.assert_called_once()
-    ac.get_client.assert_called_once_with("TestAgent")
+    mock_task_manager.update_task.assert_called_once()
+    mock_task_manager.start_task.assert_called_once()
+    bundle.agent_connections.get_client.assert_awaited_once_with("TestAgent")
     mock_agent_client.send_message.assert_called_once()
     # Should at least yield something (content or final)
     assert len(out) >= 1
+
+
+@pytest.mark.asyncio
+async def test_sets_conversation_title_on_first_plan(
+    orchestrator: AgentOrchestrator,
+    mock_agent_client: Mock,
+    mock_agent_card_non_streaming: AgentCard,
+    sample_user_input: UserInput,
+    mock_conversation_manager: Mock,
+):
+    # Non-streaming to complete quickly
+    bundle = orchestrator._testing_bundle  # type: ignore[attr-defined]
+    bundle.agent_connections.start_agent.return_value = mock_agent_card_non_streaming
+    bundle.agent_connections.get_client.return_value = mock_agent_client
+
+    # Agent returns a quick completion
+    mock_agent_client.send_message.return_value = _make_non_streaming_response()
+
+    # Force conversation creation path (first call returns None then a stub)
+    conv_created = _stub_conversation(title=None)
+    mock_conversation_manager.get_conversation.side_effect = [None, conv_created]
+
+    # Run once
+    out = []
+    async for chunk in orchestrator.process_user_input(sample_user_input):
+        out.append(chunk)
+
+    # After planning, title should be set from first task title (fixture: "Auto Title")
+    # Inspect final conversation object for title assignment
+    assert conv_created.title == "Auto Title"
+
+
+@pytest.mark.asyncio
+async def test_does_not_override_existing_title(
+    orchestrator: AgentOrchestrator,
+    mock_agent_client: Mock,
+    mock_agent_card_non_streaming: AgentCard,
+    sample_user_input: UserInput,
+    mock_conversation_manager: Mock,
+):
+    bundle = orchestrator._testing_bundle  # type: ignore[attr-defined]
+    bundle.agent_connections.start_agent.return_value = mock_agent_card_non_streaming
+    bundle.agent_connections.get_client.return_value = mock_agent_client
+    mock_agent_client.send_message.return_value = _make_non_streaming_response()
+
+    # Existing title should remain unchanged
+    conv = _stub_conversation(title="Existing Title")
+    mock_conversation_manager.get_conversation.return_value = conv
+
+    out = []
+    async for chunk in orchestrator.process_user_input(sample_user_input):
+        out.append(chunk)
+
+    # Conversation object must still have existing title
+    assert conv.title == "Existing Title"
+
+
+@pytest.mark.asyncio
+async def test_no_title_set_when_no_tasks(
+    orchestrator: AgentOrchestrator,
+    mock_agent_client: Mock,
+    mock_agent_card_non_streaming: AgentCard,
+    sample_user_input: UserInput,
+    mock_conversation_manager: Mock,
+    monkeypatch: pytest.MonkeyPatch,
+    conversation_id: str,
+    user_id: str,
+):
+    bundle = orchestrator._testing_bundle  # type: ignore[attr-defined]
+    bundle.agent_connections.start_agent.return_value = mock_agent_card_non_streaming
+    bundle.agent_connections.get_client.return_value = mock_agent_client
+    mock_agent_client.send_message.return_value = _make_non_streaming_response()
+
+    # Planner returns a plan with no tasks
+    empty_plan = ExecutionPlan(
+        plan_id="plan-empty",
+        conversation_id=conversation_id,
+        user_id=user_id,
+        orig_query="q",
+        tasks=[],
+        created_at="2025-09-16T10:00:00",
+    )
+    orchestrator.plan_service.planner.create_plan = AsyncMock(return_value=empty_plan)
+
+    conv = _stub_conversation(title=None)
+    mock_conversation_manager.get_conversation.side_effect = [conv]
+
+    out = []
+    async for chunk in orchestrator.process_user_input(sample_user_input):
+        out.append(chunk)
+
+    # Title should remain None
+    # Empty plan should not set a title
+    assert conv.title is None
 
 
 @pytest.mark.asyncio
@@ -282,12 +437,12 @@ async def test_happy_path_non_streaming(
     mock_agent_client: Mock,
     mock_agent_card_non_streaming: AgentCard,
     sample_user_input: UserInput,
+    mock_task_manager: Mock,
 ):
-    ac = Mock()
-    ac.start_agent = AsyncMock(return_value=mock_agent_card_non_streaming)
-    ac.get_client = AsyncMock(return_value=mock_agent_client)
-    ac.stop_all = AsyncMock()
-    orchestrator.agent_connections = ac
+    bundle = orchestrator._testing_bundle  # type: ignore[attr-defined]
+    bundle.agent_connections.start_agent.return_value = mock_agent_card_non_streaming
+    bundle.agent_connections.get_client.return_value = mock_agent_client
+    bundle.agent_connections.stop_all = AsyncMock()
 
     mock_agent_client.send_message.return_value = _make_non_streaming_response()
 
@@ -295,8 +450,9 @@ async def test_happy_path_non_streaming(
     async for chunk in orchestrator.process_user_input(sample_user_input):
         out.append(chunk)
 
-    orchestrator.task_manager.start_task.assert_called_once()
-    orchestrator.task_manager.complete_task.assert_called_once()
+    mock_task_manager.start_task.assert_called_once()
+    mock_task_manager.complete_task.assert_called_once()
+    bundle.agent_connections.get_client.assert_awaited_once_with("TestAgent")
     assert len(out) >= 1
 
 
@@ -304,18 +460,22 @@ async def test_happy_path_non_streaming(
 async def test_planner_error(
     orchestrator: AgentOrchestrator, sample_user_input: UserInput
 ):
-    orchestrator.planner.create_plan.side_effect = RuntimeError("Planning failed")
-
-    # Need agent connections to exist but won't be used
-    orchestrator.agent_connections = Mock()
+    orchestrator.plan_service.planner.create_plan.side_effect = RuntimeError(
+        "Planning failed"
+    )
 
     out = []
     async for chunk in orchestrator.process_user_input(sample_user_input):
         out.append(chunk)
 
-    assert len(out) == 3
-    assert "(Error)" in out[1].data.payload.content
-    assert "Planning failed" in out[1].data.payload.content
+    # Expect at least system_failed and done; may include conversation_started if newly created
+    assert len(out) >= 2
+    error_contents = [
+        getattr(getattr(r.data, "payload", None), "content", "")
+        for r in out
+        if getattr(r, "data", None)
+    ]
+    assert any("(Error)" in c and "Planning failed" in c for c in error_contents)
 
 
 @pytest.mark.asyncio
@@ -324,111 +484,20 @@ async def test_agent_connection_error(
     sample_user_input: UserInput,
     mock_agent_card_streaming: AgentCard,
 ):
-    ac = Mock()
-    ac.start_agent = AsyncMock(return_value=mock_agent_card_streaming)
-    ac.get_client = AsyncMock(return_value=None)  # Simulate connection failure
-    orchestrator.agent_connections = ac
+    bundle = orchestrator._testing_bundle  # type: ignore[attr-defined]
+    bundle.agent_connections.start_agent.return_value = mock_agent_card_streaming
+    bundle.agent_connections.get_client.return_value = (
+        None  # Simulate connection failure
+    )
 
     out = []
     async for chunk in orchestrator.process_user_input(sample_user_input):
         out.append(chunk)
 
-    assert any("(Error)" in c.data.payload.content for c in out if c.data.payload)
-
-
-@pytest.mark.asyncio
-async def test_continue_planning_metadata_retrieval(
-    orchestrator: AgentOrchestrator, conversation_id: str, sample_user_input: UserInput
-):
-    """Test that _continue_planning correctly retrieves metadata from context."""
-    from valuecell.core.coordinate.orchestrator import ExecutionContext
-    from valuecell.core.constants import PLANNING_TASK, ORIGINAL_USER_INPUT
-
-    # Create a real asyncio.Task-like object that can be awaited
-    import asyncio
-
-    async def mock_plan_coroutine():
-        return Mock()  # Mock ExecutionPlan
-
-    # Create actual task from coroutine, but mark it as done with a result
-    mock_planning_task = asyncio.create_task(mock_plan_coroutine())
-    # Wait a bit to let it complete
-    await asyncio.sleep(0.01)
-
-    # Create execution context with required metadata
-    context = ExecutionContext("planning", conversation_id, "thread-1", "user-1")
-    context.add_metadata(
-        **{PLANNING_TASK: mock_planning_task, ORIGINAL_USER_INPUT: sample_user_input}
-    )
-
-    # Set up execution context in orchestrator
-    orchestrator._execution_contexts[conversation_id] = context
-
-    # Mock dependencies
-    orchestrator._response_factory.plan_failed = Mock()
-
-    async def mock_execute_plan(*args):
-        yield Mock()
-
-    # Mock the async generator method directly
-    orchestrator._execute_plan_with_input_support = Mock(
-        return_value=mock_execute_plan()
-    )
-
-    # Call the method to trigger metadata retrieval (lines 507-508)
-    results = []
-    async for response in orchestrator._continue_planning(
-        conversation_id, "thread-1", context
-    ):
-        results.append(response)
-
-    # Verify that the method executed successfully
-    # The fact that we got here without errors means metadata was retrieved correctly
-    assert (
-        conversation_id not in orchestrator._execution_contexts
-    )  # Context should be cleaned up
-    assert mock_planning_task.done()  # Task should be completed
-    assert len(results) >= 1  # Should have yielded at least one response
-
-
-@pytest.mark.asyncio
-async def test_cancel_execution_with_planning_task(
-    orchestrator: AgentOrchestrator, conversation_id: str
-):
-    """Test that _cancel_execution correctly retrieves planning_task metadata."""
-    from valuecell.core.coordinate.orchestrator import ExecutionContext
-    from valuecell.core.constants import PLANNING_TASK
-
-    # Create mock planning task
-    mock_planning_task = Mock()
-    mock_planning_task.done.return_value = False
-    mock_planning_task.cancel = Mock()
-
-    # Create execution context with planning task
-    context = ExecutionContext("planning", conversation_id, "thread-1", "user-1")
-    context.add_metadata(**{PLANNING_TASK: mock_planning_task})
-
-    # Set up execution context in orchestrator
-    orchestrator._execution_contexts[conversation_id] = context
-
-    # Mock user input manager
-    orchestrator.user_input_manager.clear_request = Mock()
-
-    # Mock conversation manager
-    mock_conversation = _stub_conversation()
-    orchestrator.conversation_manager.get_conversation.return_value = mock_conversation
-    orchestrator.conversation_manager.update_conversation = AsyncMock()
-
-    # Call _cancel_execution to trigger
-    await orchestrator._cancel_execution(conversation_id)
-
-    # Verify planning task was retrieved and cancelled
-    mock_planning_task.cancel.assert_called_once()
-
-    # Verify context cleanup
-    assert conversation_id not in orchestrator._execution_contexts
-    orchestrator.user_input_manager.clear_request.assert_called_once_with(
-        conversation_id
+    assert any(
+        hasattr(c.data.payload, "content") and "(Error)" in c.data.payload.content
+        for c in out
+        if c.data.payload
     )
 
 
@@ -442,14 +511,18 @@ async def test_super_agent_answer_short_circuits_planner(
         enriched_query=None,
         reason="Handled directly",
     )
-    orchestrator.super_agent = SimpleNamespace(
+
+    async def _run(user_input):
+        yield outcome
+
+    orchestrator.super_agent_service = SimpleNamespace(
         name="ValueCellAgent",
-        run=AsyncMock(return_value=outcome),
+        run=_run,
     )
 
     user_input = UserInput(
         query="What is 2+2?",
-        target_agent_name=orchestrator.super_agent.name,
+        target_agent_name=orchestrator.super_agent_service.name,
         meta=UserInputMetadata(conversation_id="conv-answer", user_id="user-answer"),
     )
 
@@ -457,7 +530,7 @@ async def test_super_agent_answer_short_circuits_planner(
     async for resp in orchestrator.process_user_input(user_input):
         responses.append(resp)
 
-    orchestrator.planner.create_plan.assert_not_called()
+    orchestrator.plan_service.planner.create_plan.assert_not_called()
     payload_contents = [
         getattr(resp.data.payload, "content", "")
         for resp in responses
@@ -467,71 +540,29 @@ async def test_super_agent_answer_short_circuits_planner(
 
 
 @pytest.mark.asyncio
-async def test_super_agent_handoff_creates_component_events(
+async def test_handle_user_input_for_require_user_input_conversation(
     orchestrator: AgentOrchestrator,
+    sample_user_input: UserInput,
+    mock_conversation_manager: Mock,
 ):
-    outcome = SuperAgentOutcome(
-        decision=SuperAgentDecision.HANDOFF_TO_PLANNER,
-        answer_content=None,
-        enriched_query="Updated question",
-        reason="Needs planner",
-    )
-    orchestrator.super_agent = SimpleNamespace(
-        name="ValueCellAgent",
-        run=AsyncMock(return_value=outcome),
-    )
+    # Mock a conversation in REQUIRE_USER_INPUT status
+    mock_conversation = Mock()
+    mock_conversation.status = ConversationStatus.REQUIRE_USER_INPUT
+    mock_conversation.id = "test-conv-id"
+    mock_conversation_manager.get_conversation.return_value = mock_conversation
 
-    handoff_task = Task(
-        conversation_id="sub-conv",
-        user_id="user-1",
-        agent_name="ResearchAgent",
-        query="Updated question",
-        status=CoreTaskStatus.PENDING,
-        handoff_from_super_agent=True,
-    )
-    plan = ExecutionPlan(
-        plan_id="plan-handoff",
-        conversation_id="conv-handoff",
-        user_id="user-1",
-        orig_query="Updated question",
-        tasks=[handoff_task],
-        created_at="2025-10-20T00:00:00",
-    )
-    orchestrator.planner.create_plan = AsyncMock(return_value=plan)
+    # Mock _handle_conversation_continuation to yield a response
+    mock_response = Mock()
 
-    def _empty_task_runner(*args, **kwargs):
-        async def _gen():
-            if False:
-                yield None
+    async def mock_continuation(user_input):
+        yield mock_response
 
-        return _gen()
+    orchestrator._handle_conversation_continuation = mock_continuation
 
-    orchestrator._execute_task_with_input_support = Mock(side_effect=_empty_task_runner)
-    orchestrator._response_buffer.annotate = Mock(side_effect=lambda r: r)
-    orchestrator._persist_from_buffer = AsyncMock()
-    orchestrator._response_buffer.flush_task = Mock(return_value=[])
-    orchestrator._persist_items = AsyncMock()
-
-    user_input = UserInput(
-        query="Original question",
-        target_agent_name=orchestrator.super_agent.name,
-        meta=UserInputMetadata(conversation_id="conv-handoff", user_id="user-1"),
-    )
-
+    # Execute
     responses = []
-    async for resp in orchestrator.process_user_input(user_input):
+    async for resp in orchestrator.process_user_input(sample_user_input):
         responses.append(resp)
 
-    orchestrator.planner.create_plan.assert_awaited_once()
-    assert user_input.target_agent_name == ""
-    assert user_input.query == "Updated question"
-
-    component_payloads = [
-        getattr(resp.data.payload, "content", "")
-        for resp in responses
-        if getattr(resp, "data", None)
-        and getattr(resp.data, "payload", None)
-        and getattr(resp.data.payload, "component_type", "") == "subagent_conversation"
-    ]
-    assert any('"phase": "start"' in payload for payload in component_payloads)
-    assert any('"phase": "end"' in payload for payload in component_payloads)
+    # Verify the response was yielded
+    assert mock_response in responses

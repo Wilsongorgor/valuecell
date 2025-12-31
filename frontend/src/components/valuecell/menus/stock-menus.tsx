@@ -1,12 +1,12 @@
 import { Link, type LinkProps } from "react-router";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { cn } from "@/lib/utils";
+import { cn, formatChange, getChangeType } from "@/lib/utils";
+import { useStockColors } from "@/store/settings-store";
 
 interface Stock {
   symbol: string;
   companyName: string;
   price: string;
-  changePercent: string;
+  changePercent?: number;
   icon?: string;
   iconBgColor?: string;
 }
@@ -32,10 +32,6 @@ interface StockMenuGroupProps extends React.HTMLAttributes<HTMLDivElement> {
 interface StockMenuGroupHeaderProps
   extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
-}
-
-interface StockIconProps extends React.HTMLAttributes<HTMLDivElement> {
-  stock: Stock;
 }
 
 interface StockMenuListItemProps extends LinkProps {
@@ -93,25 +89,6 @@ function StockMenuGroupHeader({
   );
 }
 
-function StockIcon({ className, stock, ...props }: StockIconProps) {
-  return (
-    <div
-      className={cn(
-        "flex size-10 items-center justify-center rounded-full",
-        className,
-      )}
-      {...props}
-    >
-      <Avatar className="size-full">
-        <AvatarImage src={stock.icon} alt={stock.symbol} />
-        <AvatarFallback className="font-medium text-muted-foreground text-xs">
-          {stock.symbol.slice(0, 2)}
-        </AvatarFallback>
-      </Avatar>
-    </div>
-  );
-}
-
 function StockMenuListItem({
   className,
   stock,
@@ -119,26 +96,26 @@ function StockMenuListItem({
   isActive,
   ...props
 }: StockMenuListItemProps) {
+  const stockColors = useStockColors();
+  const changeType = getChangeType(stock.changePercent);
+
   return (
     <Link
       className={cn(
-        "flex items-center justify-between gap-4 rounded-xl p-2",
+        "flex items-center justify-between gap-4 rounded-lg p-2",
         "cursor-pointer transition-colors hover:bg-accent/80",
         className,
         { "bg-accent/80": isActive },
       )}
       {...props}
     >
-      <div className="flex flex-1 items-center gap-2.5">
-        {/* icon */}
-        {/* <StockIcon stock={stock} /> */}
-
+      <div className="flex flex-1 items-center gap-2.5 truncate">
         {/* stock info */}
         <div className="flex flex-col items-start gap-1">
           <p className="font-semibold text-foreground text-sm leading-tight">
             {stock.symbol}
           </p>
-          <p className="truncate text-muted-foreground/80 text-xs leading-none">
+          <p className="text-muted-foreground/80 text-xs leading-none">
             {stock.companyName}
           </p>
         </div>
@@ -148,13 +125,12 @@ function StockMenuListItem({
       <div className="flex flex-col items-end gap-1">
         <p className="font-semibold text-sm">{stock.price}</p>
         <p
-          className={cn(
-            "font-semibold text-xs leading-relaxed",
-            { "text-green-700": stock.changePercent.startsWith("+") },
-            { "text-red-700": stock.changePercent.startsWith("-") },
-          )}
+          className="font-semibold text-xs leading-relaxed"
+          style={{
+            color: stockColors[changeType],
+          }}
         >
-          {stock.changePercent}
+          {formatChange(stock.changePercent, "%")}
         </p>
       </div>
     </Link>
@@ -167,5 +143,4 @@ export {
   StockMenuGroup,
   StockMenuGroupHeader,
   StockMenuListItem,
-  StockIcon,
 };

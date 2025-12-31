@@ -161,13 +161,17 @@ function Start-Backend {
         return
     }
     
-    Write-Info "Starting backend (uv run scripts/launch.py)..."
-    Write-Info "Launching in CMD for better interactive terminal support..."
-    
-    # Use cmd.exe for better interactive support with questionary
-    # CMD handles ANSI escape sequences and arrow keys better than PowerShell
-    $launchCmd = "cd /d `"$PY_DIR`" && uv run --with questionary --with colorama scripts/launch.py"
-    Start-Process "cmd.exe" -ArgumentList "/k", $launchCmd -Wait
+    Write-Info "Starting backend in debug mode (AGENT_DEBUG_MODE=true)..."
+    Push-Location $PY_DIR
+    try {
+        # Set debug mode for local development
+        $env:AGENT_DEBUG_MODE = "true"
+        & uv run python -m valuecell.server.main
+    } catch {
+        Write-Err "Failed to start backend: $_"
+    } finally {
+        Pop-Location
+    }
 }
 
 function Start-Frontend {
@@ -179,10 +183,37 @@ function Start-Frontend {
     Write-Info "Starting frontend dev server (bun run dev)..."
     Push-Location $FRONTEND_DIR
     try {
-        $script:FRONTEND_PROCESS = Start-Process -FilePath "bun" -ArgumentList "run", "dev" -NoNewWindow -PassThru
+        # Try to find the actual bun.exe first
+        $bunExe = "$env:USERPROFILE\.bun\bin\bun.exe"
+        $bunPath = $null
+        
+        if (Test-Path $bunExe) {
+            $bunPath = $bunExe
+            Write-Info "Using bun at: $bunPath"
+            $script:FRONTEND_PROCESS = Start-Process -FilePath $bunPath -ArgumentList "run", "dev" -NoNewWindow -PassThru
+        } else {
+            # Fallback: get command and handle .ps1 scripts
+            $bunCmd = Get-Command "bun" -ErrorAction Stop
+            $resolvedPath = $bunCmd.Source
+            
+            if ([System.IO.Path]::GetExtension($resolvedPath) -eq ".ps1") {
+                # If it's a PowerShell script, use powershell.exe to execute it
+                Write-Info "Using bun script at: $resolvedPath"
+                $currentDir = Get-Location
+                $script:FRONTEND_PROCESS = Start-Process -FilePath "powershell.exe" `
+                    -ArgumentList "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "& { Set-Location '$currentDir'; & '$resolvedPath' run dev }" `
+                    -NoNewWindow -PassThru
+            } else {
+                # Regular executable
+                Write-Info "Using bun at: $resolvedPath"
+                $script:FRONTEND_PROCESS = Start-Process -FilePath $resolvedPath -ArgumentList "run", "dev" -NoNewWindow -PassThru
+            }
+        }
+        
         Write-Info "Frontend PID: $($script:FRONTEND_PROCESS.Id)"
     } catch {
         Write-Err "Failed to start frontend: $_"
+        throw
     } finally {
         Pop-Location
     }
@@ -218,6 +249,12 @@ Usage: .\start.ps1 [options]
 Description:
   - Checks whether bun and uv are installed; missing tools will be auto-installed via PowerShell scripts.
   - Then installs backend and frontend dependencies and starts services.
+  - Environment variables are loaded from system path:
+    * macOS: ~/Library/Application Support/ValueCell/.env
+    * Linux: ~/.config/valuecell/.env
+    * Windows: %APPDATA%\ValueCell\.env
+  - The .env file will be auto-created from .env.example on first run.
+  - Debug mode is automatically enabled (AGENT_DEBUG_MODE=true) for local development.
 
 Options:
   -NoFrontend     Start backend only

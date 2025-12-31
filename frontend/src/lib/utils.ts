@@ -6,52 +6,63 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/**
- * Formats a numeric price with currency symbol
- * @param price - The numeric price value
- * @param currency - Currency symbol (e.g., "$", "¥", "€")
- * @param decimals - Number of decimal places (default: 2)
- * @returns Formatted price string with currency symbol
- * @example formatPrice(1234.567, "$") // "$1234.57"
- */
-export function formatPrice(
-  price: number,
-  currency: string,
-  decimals: number = 2,
-): string {
-  return `${currency}${price.toFixed(decimals)}`;
+export const isNullOrUndefined = (value: unknown): value is undefined | null =>
+  value === undefined || value === null;
+
+export function numberFixed(number?: number, decimals = 2): string {
+  if (isNullOrUndefined(number)) return "-";
+
+  return new Intl.NumberFormat("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: decimals,
+    useGrouping: false,
+  }).format(number);
 }
 
 /**
- * Formats a percentage change with appropriate sign and styling
- * @param changePercent - The percentage change value (can be positive, negative, or zero)
- * @param decimals - Number of decimal places (default: 2)
- * @param suffix - Suffix to add to the percentage string (default: "")
- * @returns Formatted percentage string with sign
+ * Format price with currency symbol
+ */
+export function formatPrice(price: number, currency: string, decimals = 2) {
+  const currencyMap: Record<string, string> = {
+    USD: "$",
+    CNY: "¥",
+    HKD: "HK$",
+    EUR: "€",
+    GBP: "£",
+    JPY: "¥",
+    KRW: "₩",
+  };
+
+  const symbol = currencyMap[currency] || currency;
+  return `${symbol}${numberFixed(price, decimals)}`;
+}
+
+/**
+ * Format percentage change with sign
  */
 export function formatChange(
-  changePercent: number,
-  suffix: string = "",
-  decimals: number = 2,
+  changePercent?: number,
+  suffix = "",
+  decimals = 2,
 ): string {
-  if (changePercent === 0) {
-    return `${changePercent.toFixed(decimals)}${suffix}`;
-  }
-
+  if (isNullOrUndefined(changePercent)) return "N/A";
   const sign = changePercent > 0 ? "+" : "-";
-  const value = Math.abs(changePercent).toFixed(decimals);
+  const value = numberFixed(Math.abs(changePercent), decimals);
+  if (value === "0") return `${value}${suffix}`;
   return `${sign}${value}${suffix}`;
 }
 
 /**
- * Determines the type of change based on percentage value
- * @param changePercent - The percentage change value
- * @returns Change type: "positive", "negative", or "neutral"
+ * Get stock change type: "positive" (up), "negative" (down), or "neutral" (no change)
  */
-export function getChangeType(changePercent: number): StockChangeType {
-  return changePercent > 0
-    ? "positive"
-    : changePercent < 0
-      ? "negative"
-      : "neutral";
+export function getChangeType(changePercent?: number): StockChangeType {
+  if (isNullOrUndefined(changePercent) || changePercent === 0) {
+    return "neutral";
+  }
+  return changePercent > 0 ? "positive" : "negative";
 }
+
+export const getCoinCapIcon = (symbol: string) => {
+  const fixedSymbol = symbol.split(/[-/]/)[0].toLowerCase();
+  return `https://assets.coincap.io/assets/icons/${fixedSymbol}@2x.png`;
+};

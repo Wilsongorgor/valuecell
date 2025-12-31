@@ -52,13 +52,15 @@ function AgentSuggestionsHeader({
       {...props}
     >
       {title && (
-        <h2 className="font-medium text-black text-xl leading-7">{title}</h2>
+        <h2 className="font-medium text-foreground text-xl leading-7">
+          {title}
+        </h2>
       )}
       {actionText && (
         <button
           type="button"
           onClick={onActionClick}
-          className="font-normal text-base text-black/60 transition-colors hover:text-black/80"
+          className="font-normal text-base text-muted-foreground transition-colors hover:text-foreground"
         >
           {actionText}
         </button>
@@ -74,7 +76,7 @@ function AgentSuggestionItem({
 }: AgentSuggestionItemProps) {
   return (
     <AgentMenuCard
-      className={cn("h-[220px] w-52 cursor-pointer", className)}
+      className={cn("h-36 w-60 cursor-pointer", className)}
       onClick={suggestion.onClick}
       bgColor={suggestion.bgColor}
       {...props}
@@ -99,7 +101,7 @@ function AgentSuggestionItem({
               {suggestion.avatars.map((avatar, index) => (
                 <div
                   key={`${suggestion.id}-avatar-${index}`}
-                  className="-mr-2 relative size-6 overflow-hidden rounded-full border-2 border-white last:mr-0"
+                  className="relative -mr-2 size-6 overflow-hidden rounded-full border-2 border-background last:mr-0"
                 >
                   {avatar}
                 </div>
@@ -110,7 +112,7 @@ function AgentSuggestionItem({
       </div>
 
       {/* Right decorative graphics area */}
-      <div className="absolute right-4 bottom-0 h-[110px] w-[140px]">
+      <div className="absolute right-4 bottom-0 h-[100px] w-[120px]">
         {suggestion.decorativeGraphics}
       </div>
     </AgentMenuCard>

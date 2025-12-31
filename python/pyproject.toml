@@ -4,11 +4,12 @@ build-backend = "hatchling.build"
 
 [project]
 name = "valuecell"
-version = "0.1.0"
+version = "0.1.19"
 description = "ValueCell is a community-driven, multi-agent platform for financial applications."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "python-okx>=0.4.0",
     "pytz>=2023.3",
     "python-dateutil>=2.8.2",
     "fastapi>=0.104.0",
@@ -17,8 +18,8 @@ dependencies = [
     "a2a-sdk[http-server]>=0.3.4",
     "yfinance>=0.2.65",
     "requests>=2.32.5",
-    "akshare>=1.17.44",
-    "agno[openai, google, lancedb]>=2.0,<3.0",
+    "akshare>=1.17.87",
+    "agno[openai, google, lancedb, ollama]>=2.0,<3.0",
     "edgartools>=4.12.2",
     "sqlalchemy>=2.0.43",
     "aiosqlite>=0.19.0",
@@ -27,6 +28,9 @@ dependencies = [
     "loguru>=0.7.3",
     "aiofiles>=24.1.0",
     "crawl4ai>=0.7.4",
+    "ccxt>=4.5.15",
+    "baostock>=0.8.9",
+    "func-timeout>=4.3.5",
 ]
 
 [project.optional-dependencies]
@@ -40,17 +44,12 @@ dev = [
 
 [dependency-groups]
 dev = [
-    {include-group = "lint"},
-    {include-group = "style"},
-    {include-group = "test"}
+    { include-group = "lint" },
+    { include-group = "style" },
+    { include-group = "test" },
 ]
-lint = [
-    "ruff"
-]
-style = [
-    "ruff",
-    "isort",
-]
+lint = ["ruff"]
+style = ["ruff", "isort"]
 test = [
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
@@ -63,14 +62,7 @@ line-length = 88
 indent-width = 4
 target-version = "py312"
 force-exclude = true
-exclude = [
-    "venv",
-    "build",
-    "dist",
-    "node_modules",
-    "site-packages",
-    "third_party",
-]
+exclude = ["venv", "build", "dist", "node_modules", "site-packages"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -79,12 +71,8 @@ skip-magic-trailing-comma = false
 line-ending = "auto"
 
 [tool.hatch.build.targets.wheel]
-include = [
-    "valuecell",
-]
+include = ["valuecell"]
 exclude = [
-    "third_party/**",
-    "**/third_party/**",
     "tests/**",
     "**/tests/**",
     "examples/**",
@@ -94,24 +82,8 @@ exclude = [
 ]
 
 [tool.pytest.ini_options]
-norecursedirs = [
-    ".venv",
-    "venv",
-    "build",
-    "dist",
-    "logs",
-    "third_party",
-    "examples",
-    "docs",
-]
+norecursedirs = [".venv", "venv", "build", "dist", "logs", "examples", "docs"]
 
 [tool.isort]
 profile = "black"
-skip_glob = [
-    "third_party/**",
-    "**/third_party/**",
-    "tests/**",
-    "**/tests/**",
-    "docs/**",
-    "**/docs/**",
-]
+skip_glob = ["tests/**", "**/tests/**", "docs/**", "**/docs/**"]

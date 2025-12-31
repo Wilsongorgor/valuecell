@@ -1,10 +1,24 @@
 """Database initialization script for ValueCell Server."""
 
 import json
-import logging
+import shutil
 import sys
 from pathlib import Path
 from typing import Optional
+
+from loguru import logger
+
+# Smart path handling: try import first, add path only if needed
+# This allows running the script directly: uv run valuecell/server/db/init_db.py
+try:
+    import valuecell  # noqa: F401
+except ImportError:
+    # If import fails, add the Python package root to sys.path
+    # Calculate path: init_db.py -> db -> server -> valuecell -> python (root)
+    _current_file = Path(__file__).resolve()
+    _python_root = _current_file.parent.parent.parent.parent
+    if str(_python_root) not in sys.path:
+        sys.path.insert(0, str(_python_root))
 
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -13,15 +27,10 @@ from valuecell.server.config.settings import get_settings
 from valuecell.server.db.connection import DatabaseManager, get_database_manager
 from valuecell.server.db.models.agent import Agent
 from valuecell.server.db.models.base import Base
+from valuecell.server.db.models.strategy_prompt import StrategyPrompt
 from valuecell.server.db.repositories.asset_repository import get_asset_repository
 from valuecell.server.services.assets import get_asset_service
 from valuecell.utils.path import get_agent_card_path
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
-logger = logging.getLogger(__name__)
 
 
 class DatabaseInitializer:
@@ -99,9 +108,25 @@ class DatabaseInitializer:
                 # Create parent directories if they don't exist
                 db_path.parent.mkdir(parents=True, exist_ok=True)
 
-                # Create empty database file
-                db_path.touch()
-                logger.info(f"Created database file: {db_path}")
+                # If old repo-root DB exists and new system-path DB is missing, migrate it
+                try:
+                    repo_root = (
+                        Path(__file__).resolve().parent.parent.parent.parent.parent
+                    )
+                    old_repo_db = repo_root / "valuecell.db"
+                except Exception:
+                    old_repo_db = None
+
+                if old_repo_db and old_repo_db.exists() and not db_path.exists():
+                    shutil.copy2(old_repo_db, db_path)
+                    logger.info(
+                        f"Migrated existing database file from repo root to system directory: {db_path}"
+                    )
+
+                # Ensure database file exists
+                if not db_path.exists():
+                    db_path.touch()
+                    logger.info(f"Created database file: {db_path}")
                 return True
 
             except Exception as e:
@@ -116,6 +141,97 @@ class DatabaseInitializer:
         try:
             logger.info("Creating database tables...")
             Base.metadata.create_all(bind=self.engine)
+
+            # Create conversation-related tables that are not in SQLAlchemy models
+            logger.info("Creating conversation-related tables...")
+            with self.engine.connect() as conn:
+                # Create conversations table
+                conn.execute(
+                    text("""
+                    CREATE TABLE IF NOT EXISTS conversations (
+                        conversation_id TEXT PRIMARY KEY,
+                        user_id TEXT,
+                        title TEXT,
+                        agent_name TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        status TEXT DEFAULT 'active'
+                    )
+                """)
+                )
+
+                # Create conversation_items table
+                conn.execute(
+                    text("""
+                    CREATE TABLE IF NOT EXISTS conversation_items (
+                        item_id TEXT PRIMARY KEY,
+                        role TEXT NOT NULL,
+                        event TEXT NOT NULL,
+                        conversation_id TEXT NOT NULL,
+                        thread_id TEXT,
+                        task_id TEXT,
+                        payload TEXT,
+                        agent_name TEXT,
+                        metadata TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                )
+
+                # Create index for conversation_items
+                conn.execute(
+                    text("""
+                    CREATE INDEX IF NOT EXISTS idx_item_conv_time 
+                    ON conversation_items(conversation_id, created_at)
+                """)
+                )
+
+                # Create tasks table for task management
+                conn.execute(
+                    text("""
+                    CREATE TABLE IF NOT EXISTS tasks (
+                        task_id TEXT PRIMARY KEY,
+                        title TEXT,
+                        query TEXT NOT NULL,
+                        conversation_id TEXT NOT NULL,
+                        thread_id TEXT NOT NULL,
+                        user_id TEXT NOT NULL,
+                        agent_name TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'pending',
+                        pattern TEXT NOT NULL DEFAULT 'once',
+                        schedule_config TEXT,
+                        handoff_from_super_agent INTEGER DEFAULT 0,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        started_at TIMESTAMP,
+                        completed_at TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        error_message TEXT
+                    )
+                    """)
+                )
+
+                # Indexes for common task queries
+                conn.execute(
+                    text("""
+                    CREATE INDEX IF NOT EXISTS idx_tasks_conversation 
+                    ON tasks(conversation_id)
+                    """)
+                )
+                conn.execute(
+                    text("""
+                    CREATE INDEX IF NOT EXISTS idx_tasks_user 
+                    ON tasks(user_id)
+                    """)
+                )
+                conn.execute(
+                    text("""
+                    CREATE INDEX IF NOT EXISTS idx_tasks_status 
+                    ON tasks(status)
+                    """)
+                )
+
+                conn.commit()
+
             logger.info("Database tables created successfully")
             return True
 
@@ -140,6 +256,9 @@ class DatabaseInitializer:
                 "NASDAQ:IXIC",  # NASDAQ Composite Index
                 "HKEX:HSI",  # Hang Seng Index
                 "SSE:000001",  # Shanghai Composite Index
+                "SZSE:399001",  # Shenzhen Composite Index
+                "SZSE:399006",  # ChiNext Index
+                "SSE:000300",  # Science and Technology Innovation Board Index
             ]
 
             try:
@@ -283,6 +402,21 @@ class DatabaseInitializer:
                 "asset_type": "index",
                 "exchange": "SSE",
             },
+            "SZSE:399001": {
+                "name": "Shenzhen Composite Index",
+                "asset_type": "index",
+                "exchange": "SZSE",
+            },
+            "SZSE:399006": {
+                "name": "ChiNext Index",
+                "asset_type": "index",
+                "exchange": "SZSE",
+            },
+            "SSE:000300": {
+                "name": "CSI 300 Index",
+                "asset_type": "index",
+                "exchange": "SSE",
+            },
             "HKEX:HSI": {
                 "name": "Hang Seng Index",
                 "asset_type": "index",
@@ -313,7 +447,7 @@ class DatabaseInitializer:
         return None
 
     def initialize_basic_data(self) -> bool:
-        """Initialize default agent and asset data."""
+        """Initialize default agent data."""
         try:
             logger.info("Initializing default agent data...")
 
@@ -367,16 +501,90 @@ class DatabaseInitializer:
                         logger.info(f"Updated default agent: {agent_name}")
 
                 session.commit()
-                logger.info("Default agent data initialization completed")
-
-                # Initialize assets using AssetService
-                assets_initialized = self.initialize_assets_with_service()
-                if not assets_initialized:
-                    logger.warning(
-                        "Asset initialization via AssetService failed, but continuing..."
+                # Insert default strategy prompt from template if not present
+                try:
+                    template_path = (
+                        Path(__file__).resolve().parents[2]
+                        / "agents"
+                        / "prompt_strategy_agent"
+                        / "templates"
+                        / "default.txt"
                     )
+                    prompt_id = "prompt-system-default"
+                    existing_prompt = (
+                        session.query(StrategyPrompt)
+                        .filter(StrategyPrompt.id == prompt_id)
+                        .first()
+                    )
+                    if not existing_prompt:
+                        if template_path.exists():
+                            content = template_path.read_text(encoding="utf-8")
+                            prompt = StrategyPrompt(
+                                id=prompt_id, name="System Default", content=content
+                            )
+                            session.add(prompt)
+                            session.commit()
+                            logger.info(
+                                "Inserted default strategy prompt: %s", prompt_id
+                            )
+                        else:
+                            logger.warning(
+                                "Default strategy prompt template not found: %s",
+                                template_path,
+                            )
+                except Exception as e:
+                    # Do not fail the whole DB init for prompt insertion; log and continue
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
+                    logger.error("Failed to insert default strategy prompt: %s", e)
 
-                logger.info("Default agent and asset data initialization completed")
+                # Insert aggressive strategy prompt from template if not present
+                try:
+                    aggressive_path = (
+                        Path(__file__).resolve().parents[2]
+                        / "agents"
+                        / "prompt_strategy_agent"
+                        / "templates"
+                        / "aggressive.txt"
+                    )
+                    aggressive_id = "prompt-system-aggressive"
+                    aggressive_existing = (
+                        session.query(StrategyPrompt)
+                        .filter(StrategyPrompt.id == aggressive_id)
+                        .first()
+                    )
+                    if not aggressive_existing:
+                        if aggressive_path.exists():
+                            aggressive_content = aggressive_path.read_text(
+                                encoding="utf-8"
+                            )
+                            aggressive_prompt = StrategyPrompt(
+                                id=aggressive_id,
+                                name="System Aggressive",
+                                content=aggressive_content,
+                            )
+                            session.add(aggressive_prompt)
+                            session.commit()
+                            logger.info(
+                                "Inserted aggressive strategy prompt: %s",
+                                aggressive_id,
+                            )
+                        else:
+                            logger.warning(
+                                "Aggressive strategy prompt template not found: %s",
+                                aggressive_path,
+                            )
+                except Exception as e:
+                    # Do not fail the whole DB init for prompt insertion; log and continue
+                    try:
+                        session.rollback()
+                    except Exception:
+                        pass
+                    logger.error("Failed to insert aggressive strategy prompt: %s", e)
+
+                logger.info("Default agent data initialization completed")
                 return True
 
             except Exception as e:
@@ -429,12 +637,17 @@ class DatabaseInitializer:
             logger.error("Failed to create tables")
             return False
 
-        # Step 3: Initialize basic data
+        # Step 3: Initialize basic data (agents)
         if not self.initialize_basic_data():
             logger.error("Failed to initialize basic data")
             return False
 
-        # Step 4: Verify initialization
+        # Step 4: Initialize assets with service
+        if not self.initialize_assets_with_service():
+            logger.error("Failed to initialize assets")
+            return False
+
+        # Step 5: Verify initialization
         if not self.verify_initialization():
             logger.error("Database initialization verification failed")
             return False
@@ -485,12 +698,8 @@ def main():
         action="store_true",
         help="Force re-initialization even if database exists",
     )
-    parser.add_argument("--verbose", action="store_true", help="Enable verbose logging")
 
     args = parser.parse_args()
-
-    if args.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
 
     logger.info("ValueCell Database Initialization")
     logger.info("=" * 50)

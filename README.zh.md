@@ -22,29 +22,56 @@
     <a href="https://www.facebook.com/people/ValueCell/61581410516790/" target="_blank">
         <img src="https://custom-icon-badges.demolab.com/badge/Facebook-1877F2?logo=facebook-white&logoColor=fff"
             alt="follow on Facebook"></a>
+    <a href="https://www.youtube.com/watch?v=C3tfHyGY9YE" target="_blank">
+        <img src="https://img.shields.io/badge/Watch%20on-YouTube-red?logo=youtube"
+            alt="Watch on YouTube"></a>
 </div>
 
 <div align="center">
-  <a href="README.md" style="color: gray;">English</a>
+  <a href="README.md" style="color: auto;">English</a>
   <a href="README.zh.md" style="color: gray;">中文（简体）</a>
   <a href="README.zh_Hant.md" style="color: auto;">中文（繁體）</a>
+  <a href="README.ja.md" style="color: auto;">日本語</a>
 </div>
 
 
 # ValueCell
-ValueCell 是一个社区驱动的多智能体金融应用平台。
+ValueCell 是一个社区驱动的多智能体金融应用产品，我们的计划是打造全球最大的去中心化金融智能体社区
 
-它将为您提供顶级的投资智能体团队，帮助您管理投资组合。
+它将为您提供顶级的投资智能体团队，帮助您完成选股，调研，跟踪和交易
+
+系统会将您的敏感信息完全托管在本地，保证核心数据安全
+
+欢迎大家加入Discord社区反馈使用中遇到的问题，以及更多开发者参与共建🔥🔥🔥
+
+>注意：ValueCell团队人员不会主动私信社区参与者，项目仅为技术交流使用，投资有风险。⚠️
 
 # 产品截图
+
+[![观看视频](https://img.youtube.com/vi/C3tfHyGY9YE/maxresdefault.jpg)](https://www.youtube.com/watch?v=C3tfHyGY9YE)
 
 <p align="center">
   <img src="assets/product/homepage.png" style="width: 100%; height: auto;">
 </p>
 
+
 <p align="center">
-  <img src="assets/product/agent_welcome.png" style="width: 100%; height: auto;">
+  <img src="assets/product/superagent.png" style="width: 100%; height: auto;">
 </p>
+
+<p align="center">
+  <img src="assets/product/AutoTradingAgent.png" style="width: 100%; height: auto;">
+</p>
+
+<p align="center">
+  <img src="assets/product/Model_Configuration.png" style="width: 100%; height: auto;">
+</p>
+
+<p align="center">
+  <img src="assets/product/agent_market.png" style="width: 100%; height: auto;">
+</p>
+
+
 
 # 核心特性
 
@@ -54,83 +81,125 @@ ValueCell 是一个社区驱动的多智能体金融应用平台。
 
 
 ## 多智能体系统
-- **Trading Agents**：专门负责市场分析、情绪分析、新闻分析和基本面分析的智能体协同工作
-- **AI-Hedge-Fund**：智能体协作提供全面的金融洞察
-- **SEC Agent**：提供来自SEC的实时的推送更新
+- **DeepResearch Agent**: 获取并分析股票的基本面文件，输出准确的数据、可解释性的总结
+- **Strategy Agent**: 支持多种加密资产、多策略智能交易，自动执行你的策略
+- **News Retrieval Agent**: 支持个性化定时任务的新闻推送，及时跟踪关键信息
 - **其他智能体**：更多智能体正在规划中...
 
 ## 灵活集成
-- **多种大语言模型提供商**：支持 OpenRouter、OpenAI、Anthropic、Google 和 Ollama
+- **多种大语言模型提供商**：支持 OpenRouter、SiliconFlow、Azure、Openai-compatible、Google、OpenAI和DeepSeek
 - **热门市场数据**：覆盖美国市场、加密货币市场、香港市场、中国市场等
-- **多智能体框架兼容**：通过 A2A 协议，支持 Langchain、Agno 等主流Agent框架
+- **多智能体框架兼容**：通过 A2A 协议，支持 Langchain、Agno 等主流Agent框架，进行研发集成
+- **交易所连接**：支持实时路由至 OKX 和 Binance，并内置安全防护机制
 
 # 快速开始
 
-ValueCell 是一个基于Python的应用程序，且有完备的前端操作页面。可以参考下面配置快速运行。
+## 新用户
 
-## 前提条件
+要快速开始，请从 GitHub 的[发布页面](https://github.com/ValueCell-ai/valuecell/releases)下载 MacOS 或 Windows 的最新 ValueCell 应用程序。您也可以从我们的官方网站 [https://valuecell.ai](https://valuecell.ai) 下载应用程序。
 
-为了获得最佳性能和简化开发，我们建议安装以下工具：
+安装后，初次使用 ValueCell 前请配置您首选的模型提供商。请参考应用程序内的说明或文档。
 
-**[uv](https://docs.astral.sh/uv/getting-started/installation/)** - 用Rust构建的超快速Python包和项目管理器  
-**[bun](https://github.com/oven-sh/bun#install)** - 高性能JavaScript/TypeScript工具包，集成运行时、打包器、测试运行器和包管理器
+### 实时交易
 
-## 安装
+- 配置 AI 模型: 通过网页UI界面添加你的 AI 模型 API Key。
+- 配置交易所: 设置 Binance/HyperLiquid/OKX/Coinbase... API 凭证
+- 创建策略: 将 AI 模型与交易所组合，创建自定义交易策略
+- 监控与控制: 实时启动/停止策略，并实时监控交易表现
+- 注意：当前仅支持合约交易（现货以1X合约实现），所以请确保合约账户存在余额
 
-1. **克隆仓库**
+#### 支持的交易所
+
+| 交易所 | 说明 | 状态 |
+| --- | --- | --- |
+| **Binance** | 仅支持国际站 [binance.com](binance.com)，不支持美国站。使用 USDT-M 合约（USDT 本位合约）。请确保您的合约账户有足够的 USDT 余额。交易对格式：`BTC/USDT`。 Note：确保永续合约账户不为0。 申请API添加IP白名单通过搜索引擎搜索`My IP`查看 | ✅ 已测试 |
+| **Hyperliquid** | 仅支持 USDC 作为保证金货币。使用您的主钱包地址 + API 钱包私钥认证（使用 [API 页面](https://app.hyperliquid.xyz/API) 申请）。市价单会自动转换为 IoC 限价单。交易对格式必须手动调整为 `SYMBOL/USDC`（例如 `WIF/USDC`） 配置地址为主钱包地址+API钱包私钥 每次交易至少10U | ✅ 已测试 |
+| **OKX** | 需要 API Key、Secret 和 Passphrase（OKX账号密码） 进行认证。支持 USDT 本位合约。交易对格式：`BTC/USDT`。 | ✅ 已测试 |
+| Coinbase | 支持 USDT 本位合约。Coinbase International 尚未支持 | 🟡 部分测试 |
+| Gate.io | 支持 USDT 本位合约。需要 API Key 和 Secret | 🟡 部分测试 |
+| MEXC | 支持 USDT 本位合约。需要 API Key 和 Secret | 🟡 部分测试 |
+| Blockchain | 支持 USDT 本位合约。需要 API Key 和 Secret | 🟡 部分测试 |
+
+**图例**:
+- ✅ **已测试**: 在生产环境中经过充分测试和验证
+- 🟡 **部分测试**: 代码实现已完成但未完全测试，可能需要调试
+- **推荐**: 优先使用经过充分测试的交易所（Binance, Hyperliquid, OKX）
+
+### 注意事项
+- 目前仅支持杠杆/合约交易，因此您需要确保您的永续合约（Perps）账户有足够的余额。
+- 您必须妥善保管您的 API 密钥以避免资金损失。该应用程序将密钥本地存储在您的设备上，不会通过互联网发送给任何第三方。
+- 为了确保您的账户安全，您需要定期重置您的 API 密钥。
+
+---
+
+**注意**：运行应用程序前，请确保所有前提条件已安装且环境变量已正确配置
+如长时间没有更新，可以删除本地数据并重新启动：
+- LanceDB 目录（位于系统应用目录，与 `.env` 同路径）：
+  - macOS: `~/Library/Application Support/ValueCell/lancedb`
+  - Linux: `~/.config/valuecell/lancedb`
+  - Windows: `%APPDATA%\\ValueCell\\lancedb`
+- 知识目录（位于系统应用目录，与 `.env` 同路径）：
+  - macOS: `~/Library/Application Support/ValueCell/.knowledge`
+  - Linux: `~/.config/valuecell/.knowledge`
+  - Windows: `%APPDATA%\\ValueCell\\.knowledge`
+- SQLite 数据库文件（位于系统应用目录，与 `.env` 同路径）：
+  - macOS: `~/Library/Application Support/ValueCell/valuecell.db`
+  - Linux: `~/.config/valuecell/valuecell.db`
+  - Windows: `%APPDATA%\\ValueCell\\valuecell.db`
+
+
+## 开发者
+
+诚挚邀请每位开发者加入Discord讨论组，我们会定期交流社区RoadMap以及未来社区贡献者权益规划
+
+开发流程及标准详见:[CONTRIBUTING.md](.github/CONTRIBUTING.md)
+
+ValueCell 是一个基于Python的应用程序，且有完备的前端操作页面，支持多端应用。可以参考下面配置快速运行。
+
+## 克隆仓库
 
    ```bash
    git clone https://github.com/ValueCell-ai/valuecell.git
    cd valuecell
    ```
 
-2. **配置环境变量**
-
-   ```bash
-   cp .env.example .env
-   ```
-   
-   使用您的API密钥和偏好设置编辑`.env`文件。此配置文件在所有智能体之间共享。
-
-## 配置
-
-### 模型提供商
-通过编辑`.env`文件配置您首选的模型提供商：
-
-- **主要支持**：[OpenRouter](https://openrouter.ai) - 目前大多数智能体的主要支持提供商
-- **TradingAgents** 集成了Memory功能。如果您使用OpenRouter作为API密钥，需要配置嵌入模型参数（因为OpenRouter不支持嵌入模型）。请参考TradingAgents/.env.example文件，并将其配置复制到根目录的.env文件中。
-  
-
-根据您的需求和使用模式选择首选的模型和提供商。
-
 ## 运行应用程序
 
-启动完整的应用程序堆栈（前端、后端和智能体）：
+启动完整的应用程序（前端、后端和智能体）：
 
+### Linux / Macos
 ```bash
 bash start.sh
 ```
 
-## 访问界面
+### Windows (PowerShell)
+```powershell
+.\start.ps1
+```
+
+### 访问界面
 
 - **Web UI**：在浏览器中导航到 [http://localhost:1420](http://localhost:1420)
-- **日志**：在 `logs/{timestamp}/*.log` 监控应用程序日志，获取后端服务和各个智能体的详细运行时信息
+- **日志**：在终端就可以查看应用程序日志，获取后端服务和各个智能体的详细运行时信息
 
-## 最后
+### 下一步
 
-应用程序运行后，您可以通过Web界面使用ValueCell中集成的Agents。
+应用运行后，你可以通过网页界面探索并使用 ValueCell 的各项功能和能力。
 
----
+### 配置
 
-**注意**：运行应用程序前，请确保所有前提条件已安装且环境变量已正确配置。
-
+更多系统配置详情说明可以参考[CONFIGURATION_GUIDE](./docs/CONFIGURATION_GUIDE.md)
 
 # Roadmap
 
 ## 🤖 增强智能体能力
+### 交易能力
+- **加密货币**：支持okx、binance、Hyperliquid交易所，更多交易所规划接入中...
+- **证券**：逐步支持AI证券交易
+
 ### 市场扩展
 - **欧洲市场**：增加对富时指数、DAX、CAC 40和其他欧洲交易所的支持
-- **亚洲市场**：扩展对日经指数、恒生指数、上证综指和新兴亚洲市场的覆盖
+- **亚洲市场**：扩展对日经指数和新兴亚洲市场的覆盖
 - **大宗商品市场**：石油、黄金、白银、农产品分析
 - **外汇市场**：主要货币对和交叉货币分析
 
@@ -144,9 +213,13 @@ bash start.sh
 - **定期报告**：每日/每周/每月投资组合摘要
 - **事件驱动通知**：财报发布、股息公告、监管变化
 - **自定义触发器**：用户定义的条件和阈值
-- **多渠道推送**：邮件、短信、Slack、Discord和webhook集成
+- **多渠道推送**：Discord和webhook集成
 
 ## ⚙️ 产品配置与个性化
+### 多端产品化
+-- **客户端支持**：逐步支持桌面端、客户端能力
+-- **数据库热更新**：逐步支持兼容性升级
+
 ### 国际化 (i18n)
 - **多语言支持**：英语、中文（简体/繁体）、日语、韩语、西班牙语、法语
 - **本地化市场数据**：特定地区的金融术语和格式
@@ -156,8 +229,6 @@ bash start.sh
 ### 令牌和身份验证管理
 - **API密钥管理**：第三方API密钥的安全存储和轮换
 - **OAuth集成**：支持主要金融数据提供商
-- **速率限制**：智能请求节流和配额管理
-- **多租户架构**：企业级用户隔离和安全
 
 ### 用户偏好和自定义
 - **投资档案**：风险承受能力、投资期限和策略偏好
@@ -174,20 +245,33 @@ bash start.sh
 ## 🔧 ValueCell SDK开发
 ### 核心SDK功能
 - **Python SDK**：用于智能体集成和自定义的核心代码，衔接前后端
-- **REST API包装器**：具有自动身份验证的简化HTTP客户端
 - **WebSocket支持**：实时数据流和双向通信
 
 ### 智能体集成框架
 - **插件架构**：轻松集成第三方智能体和工具
 - **智能体注册表**：社区贡献智能体的市场
-- **自定义智能体构建器**：低代码/无代码智能体创建工具
-- **智能体编排**：工作流管理和智能体协调
 
 ### 开发者工具和文档
 - **交互式API浏览器**：带有实时测试的Swagger/OpenAPI文档
 - **代码示例**：多种编程语言的示例实现
 - **测试框架**：单元测试、集成测试和模拟数据提供商
 
+
+# 许可证
+
+本项目依据 **Apache License 2.0** 授权发布；详情参见 `LICENSE` 文件。
+
+> 📌 注意：Apache 2.0 仅适用于由 ValueCell 团队及贡献者创作的原始代码。第三方组件（如 API、挂件、库）受其各自的许可证与使用条款约束——见下方说明。
+
+## 第三方组件与许可
+
+ValueCell 集成外部服务并嵌入第三方挂件。其使用不受 Apache 2.0 覆盖，遵循其服务条款的合规责任由用户/开发者自行承担。
+
+| 组件 | 类型 | 许可证 / 条款 |
+|---------|------|-----------------|
+| **TradingView Advanced Chart** | 嵌入式 iframe 挂件 | [Free Advanced Charts Agreement](https://www.tradingview.com/chart-embedding/)（专有） |
+| **交易所 API**（Binance、OKX、Hyperliquid 等） | REST/WebSocket 接口 | 各交易所的服务条款（例如 [Binance API 条款](https://www.binance.com/en/terms)） |
+| **大语言模型提供商**（OpenAI、Azure、Google、DeepSeek 等） | 推理 API | 供应商特定的使用条款（例如 [OpenAI 使用条款](https://openai.com/policies/terms-of-use)） |
 
 # Star
 

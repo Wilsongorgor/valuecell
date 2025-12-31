@@ -35,6 +35,15 @@ from .i18n import (
     UserI18nSettingsData,
     UserI18nSettingsRequest,
 )
+from .model import CheckModelRequest, CheckModelResponse, LLMModelConfigData
+from .task import TaskCancelData
+from .user_profile import (
+    CreateUserProfileRequest,
+    UpdateUserProfileRequest,
+    UserProfileData,
+    UserProfileListData,
+    UserProfileSummaryData,
+)
 from .watchlist import (
     AddAssetRequest,
     AssetDetailData,
@@ -98,4 +107,16 @@ __all__ = [
     "AssetHistoricalPriceData",
     "AssetHistoricalPricesData",
     "WatchlistWithPricesData",
+    # User Profile schemas
+    "UserProfileData",
+    "CreateUserProfileRequest",
+    "UpdateUserProfileRequest",
+    "UserProfileListData",
+    "UserProfileSummaryData",
+    # Task schemas
+    "TaskCancelData",
+    # Model schemas
+    "LLMModelConfigData",
+    "CheckModelRequest",
+    "CheckModelResponse",
 ]

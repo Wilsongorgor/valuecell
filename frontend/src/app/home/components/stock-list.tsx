@@ -1,25 +1,21 @@
 import { memo, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useLocation } from "react-router";
 import { useGetStockPrice, useGetWatchlist } from "@/api/stock";
 import {
   StockMenu,
-  StockMenuGroup,
-  StockMenuGroupHeader,
   StockMenuHeader,
   StockMenuListItem,
 } from "@/components/valuecell/menus/stock-menus";
-import ScrollContainer from "@/components/valuecell/scroll/scroll-container";
 import type { Stock } from "@/types/stock";
 
 function StockList() {
+  const { t } = useTranslation();
   const { pathname } = useLocation();
   const { data: stockList } = useGetWatchlist();
 
   const stockData = useMemo(() => {
-    return stockList?.map((group) => ({
-      title: group.name,
-      stocks: group.items,
-    }));
+    return stockList?.flatMap((group) => group.items) ?? [];
   }, [stockList]);
 
   // Extract stock symbol (e.g., AAPL) from path like /stock/AAPL
@@ -35,7 +31,7 @@ function StockList() {
         symbol: stock.symbol,
         companyName: stock.display_name,
         price: stockPrice?.price_formatted ?? "N/A",
-        changePercent: stockPrice?.change_percent_formatted ?? "N/A",
+        changePercent: stockPrice?.change_percent,
       }),
       [stock, stockPrice],
     );
@@ -51,18 +47,13 @@ function StockList() {
   };
 
   return (
-    <StockMenu>
-      <StockMenuHeader>My Stocks</StockMenuHeader>
-      <ScrollContainer>
-        {stockData?.map((group) => (
-          <StockMenuGroup key={group.title}>
-            <StockMenuGroupHeader>{group.title}</StockMenuGroupHeader>
-            {group.stocks.map((stock) => (
-              <StockItem key={stock.symbol} stock={stock} />
-            ))}
-          </StockMenuGroup>
+    <StockMenu className="h-full">
+      <StockMenuHeader>{t("home.watchlist")}</StockMenuHeader>
+      <div className="scroll-container">
+        {stockData?.map((stock) => (
+          <StockItem key={stock.symbol} stock={stock} />
         ))}
-      </ScrollContainer>
+      </div>
     </StockMenu>
   );
 }

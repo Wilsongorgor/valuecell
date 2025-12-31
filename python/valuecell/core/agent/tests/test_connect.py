@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,6 +10,7 @@ from typing import ClassVar, Dict, Optional
 import pytest
 from a2a.client.client_factory import minimal_agent_card
 from a2a.types import AgentCard
+
 from valuecell.core.agent import connect as connect_mod
 from valuecell.core.agent.connect import RemoteConnections
 
@@ -128,6 +130,223 @@ async def test_load_from_dir_and_list(tmp_path: Path, monkeypatch: pytest.Monkey
 
     all_agents = rc.list_available_agents()
     assert set(all_agents) == {"AgentAlpha", "AgentBeta"}
+
+
+def test_preload_agent_classes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    # Prepare an agent card with a local class spec
+    dir_path = tmp_path / "agent_cards"
+    dir_path.mkdir(parents=True)
+
+    card = make_card_dict(
+        "LocalAgent", "http://127.0.0.1:8101", push_notifications=False
+    )
+    # Add metadata with local_agent_class
+    card["metadata"] = {
+        "local_agent_class": "valuecell.agents.prompt_strategy_agent.core:PromptBasedStrategyAgent"
+    }
+    with open(dir_path / "LocalAgent.json", "w", encoding="utf-8") as f:
+        json.dump(card, f)
+
+    rc = RemoteConnections()
+    rc.load_from_dir(str(dir_path))
+
+    # Before preload, agent_instance_class should be None
+    ctx = rc._contexts["LocalAgent"]
+    assert ctx.agent_instance_class is None
+
+    # Call preload
+    rc.preload_local_agent_classes()
+
+    # After preload, agent_instance_class should be set
+    assert ctx.agent_instance_class is not None
+
+
+def test_preload_skips_agents_without_class_spec(tmp_path: Path):
+    """Test that preload skips agents without agent_class_spec."""
+    dir_path = tmp_path / "agent_cards"
+    dir_path.mkdir(parents=True)
+
+    # Card without metadata (no local_agent_class)
+    card = make_card_dict(
+        "NoSpecAgent", "http://127.0.0.1:8102", push_notifications=False
+    )
+    with open(dir_path / "NoSpecAgent.json", "w", encoding="utf-8") as f:
+        json.dump(card, f)
+
+    rc = RemoteConnections()
+    rc.load_from_dir(str(dir_path))
+
+    ctx = rc._contexts["NoSpecAgent"]
+    assert ctx.agent_class_spec is None
+
+    # Preload should skip this agent (no error, just skip)
+    rc.preload_local_agent_classes()
+
+    # Still None since there was no spec
+    assert ctx.agent_instance_class is None
+
+
+def test_preload_skips_already_loaded_class(tmp_path: Path):
+    """Test that preload skips agents with class already loaded."""
+    dir_path = tmp_path / "agent_cards"
+    dir_path.mkdir(parents=True)
+
+    card = make_card_dict(
+        "PreloadedAgent", "http://127.0.0.1:8103", push_notifications=False
+    )
+    card["metadata"] = {
+        "local_agent_class": "valuecell.agents.prompt_strategy_agent.core:PromptBasedStrategyAgent"
+    }
+    with open(dir_path / "PreloadedAgent.json", "w", encoding="utf-8") as f:
+        json.dump(card, f)
+
+    rc = RemoteConnections()
+    rc.load_from_dir(str(dir_path))
+
+    ctx = rc._contexts["PreloadedAgent"]
+    # Simulate class already loaded
+    sentinel_class = type("SentinelClass", (), {})
+    ctx.agent_instance_class = sentinel_class
+
+    # Preload should skip since class is already loaded
+    rc.preload_local_agent_classes()
+
+    # Should still be sentinel, not replaced
+    assert ctx.agent_instance_class is sentinel_class
+
+
+def test_preload_handles_failed_import(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """Test that preload warns on failed import but continues."""
+    dir_path = tmp_path / "agent_cards"
+    dir_path.mkdir(parents=True)
+
+    card = make_card_dict(
+        "FailAgent", "http://127.0.0.1:8104", push_notifications=False
+    )
+    card["metadata"] = {"local_agent_class": "nonexistent.module:FakeClass"}
+    with open(dir_path / "FailAgent.json", "w", encoding="utf-8") as f:
+        json.dump(card, f)
+
+    rc = RemoteConnections()
+    rc.load_from_dir(str(dir_path))
+
+    ctx = rc._contexts["FailAgent"]
+    assert ctx.agent_class_spec == "nonexistent.module:FakeClass"
+
+    # Preload should warn but not raise
+    rc.preload_local_agent_classes()
+
+    # Class should remain None due to failed import
+    assert ctx.agent_instance_class is None
+
+
+def test_preload_with_names_loads_only_specified(tmp_path: Path):
+    """When a `names` filter is provided, only those agents are preloaded."""
+    dir_path = tmp_path / "agent_cards"
+    dir_path.mkdir(parents=True)
+
+    card1 = make_card_dict(
+        "AgentOne", "http://127.0.0.1:9001", push_notifications=False
+    )
+    card1["metadata"] = {
+        "local_agent_class": "valuecell.agents.prompt_strategy_agent.core:PromptBasedStrategyAgent"
+    }
+    card2 = make_card_dict(
+        "AgentTwo", "http://127.0.0.1:9002", push_notifications=False
+    )
+    card2["metadata"] = {
+        "local_agent_class": "valuecell.agents.prompt_strategy_agent.core:PromptBasedStrategyAgent"
+    }
+
+    with open(dir_path / "AgentOne.json", "w", encoding="utf-8") as f:
+        json.dump(card1, f)
+    with open(dir_path / "AgentTwo.json", "w", encoding="utf-8") as f:
+        json.dump(card2, f)
+
+    rc = RemoteConnections()
+    rc.load_from_dir(str(dir_path))
+
+    # Only preload AgentOne
+    rc.preload_local_agent_classes(names=["AgentOne"])
+
+    assert rc._contexts["AgentOne"].agent_instance_class is not None
+    assert rc._contexts["AgentTwo"].agent_instance_class is None
+
+
+def test_preload_with_names_not_present_skips_all(tmp_path: Path):
+    """Providing names that don't match any context should skip preloading."""
+    dir_path = tmp_path / "agent_cards"
+    dir_path.mkdir(parents=True)
+
+    card = make_card_dict(
+        "OnlyAgent", "http://127.0.0.1:9003", push_notifications=False
+    )
+    card["metadata"] = {
+        "local_agent_class": "valuecell.agents.prompt_strategy_agent.core:PromptBasedStrategyAgent"
+    }
+    with open(dir_path / "OnlyAgent.json", "w", encoding="utf-8") as f:
+        json.dump(card, f)
+
+    rc = RemoteConnections()
+    rc.load_from_dir(str(dir_path))
+
+    # Provide a names list that does not include 'OnlyAgent'
+    rc.preload_local_agent_classes(names=["NoSuchAgent"])
+
+    assert rc._contexts["OnlyAgent"].agent_instance_class is None
+
+
+def test_preload_with_names_empty_list_skips_all(tmp_path: Path):
+    """Providing an empty `names` list should skip preloading all agents."""
+    dir_path = tmp_path / "agent_cards"
+    dir_path.mkdir(parents=True)
+
+    card = make_card_dict(
+        "SomeAgent", "http://127.0.0.1:9004", push_notifications=False
+    )
+    card["metadata"] = {
+        "local_agent_class": "valuecell.agents.prompt_strategy_agent.core:PromptBasedStrategyAgent"
+    }
+    with open(dir_path / "SomeAgent.json", "w", encoding="utf-8") as f:
+        json.dump(card, f)
+
+    rc = RemoteConnections()
+    rc.load_from_dir(str(dir_path))
+
+    # Provide empty list -> nothing should be preloaded
+    rc.preload_local_agent_classes(names=[])
+
+    assert rc._contexts["SomeAgent"].agent_instance_class is None
+
+
+def test_preload_with_names_includes_agent_without_spec(tmp_path: Path):
+    """When `names` includes an agent that lacks a class spec, it should be skipped without error."""
+    dir_path = tmp_path / "agent_cards"
+    dir_path.mkdir(parents=True)
+
+    card_spec = make_card_dict(
+        "WithSpec", "http://127.0.0.1:9005", push_notifications=False
+    )
+    card_spec["metadata"] = {
+        "local_agent_class": "valuecell.agents.prompt_strategy_agent.core:PromptBasedStrategyAgent"
+    }
+    card_nospec = make_card_dict(
+        "NoSpec", "http://127.0.0.1:9006", push_notifications=False
+    )
+
+    with open(dir_path / "WithSpec.json", "w", encoding="utf-8") as f:
+        json.dump(card_spec, f)
+    with open(dir_path / "NoSpec.json", "w", encoding="utf-8") as f:
+        json.dump(card_nospec, f)
+
+    rc = RemoteConnections()
+    rc.load_from_dir(str(dir_path))
+
+    # Request preload for both; only WithSpec should be loaded
+    rc.preload_local_agent_classes(names=["WithSpec", "NoSpec"])
+
+    assert rc._contexts["WithSpec"].agent_instance_class is not None
+    assert rc._contexts["NoSpec"].agent_instance_class is None
 
 
 @pytest.mark.asyncio
@@ -374,3 +593,410 @@ async def test_get_all_agent_cards_returns_local_cards(tmp_path: Path):
 
     assert set(all_cards.keys()) == {"CardOne", "CardTwo"}
     assert all(isinstance(card, AgentCard) for card in all_cards.values())
+
+
+def test_agent_context_reads_metadata_flags(tmp_path: Path):
+    dir_path = tmp_path / "agent_cards"
+    dir_path.mkdir(parents=True)
+
+    card = make_card_dict("MetaVisible", "http://127.0.0.1:8910", True)
+    card["metadata"] = {"planner_passthrough": True, "hidden": True}
+
+    _write_card(dir_path / "MetaVisible.json", card)
+
+    rc = RemoteConnections()
+    rc.load_from_dir(str(dir_path))
+
+    ctx = rc._contexts["MetaVisible"]
+    assert ctx.metadata == card["metadata"]
+    assert ctx.planner_passthrough is True
+    assert ctx.hidden is True
+
+
+def test_get_planable_agent_cards_filters_flags(tmp_path: Path):
+    dir_path = tmp_path / "agent_cards"
+    dir_path.mkdir(parents=True)
+
+    visible = make_card_dict("Planable", "http://127.0.0.1:8920", True)
+    hidden = make_card_dict("Hidden", "http://127.0.0.1:8921", True)
+    passthrough = make_card_dict("Passthrough", "http://127.0.0.1:8922", True)
+    hidden["metadata"] = {"hidden": True}
+    passthrough["metadata"] = {"planner_passthrough": True}
+
+    _write_card(dir_path / "Planable.json", visible)
+    _write_card(dir_path / "Hidden.json", hidden)
+    _write_card(dir_path / "Passthrough.json", passthrough)
+
+    rc = RemoteConnections()
+    rc.load_from_dir(str(dir_path))
+
+    planable = rc.get_planable_agent_cards()
+
+    assert set(planable.keys()) == {"Planable"}
+    assert planable["Planable"].name == "Planable"
+
+
+@pytest.mark.asyncio
+async def test_resolve_local_agent_class_from_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    # Prepare a card with metadata pointing to a fake spec
+    dir_path = tmp_path / "agent_cards"
+    dir_path.mkdir(parents=True)
+
+    card = {
+        "name": "MetaAgent",
+        "url": "http://127.0.0.1:9001",
+        "enabled": True,
+        "metadata": {connect_mod.AGENT_METADATA_CLASS_KEY: "fake:Spec"},
+        "skills": [],
+    }
+    with open(dir_path / "MetaAgent.json", "w", encoding="utf-8") as f:
+        json.dump(card, f)
+
+    # Monkeypatch resolver to return DummyAgent class for that spec
+    class DummyAgent:
+        pass
+
+    async def _fake_resolver(spec):
+        return DummyAgent if spec == "fake:Spec" else None
+
+    monkeypatch.setattr(connect_mod, "_resolve_local_agent_class", _fake_resolver)
+
+    rc = RemoteConnections()
+    rc.load_from_dir(str(dir_path))
+
+    ctx = rc._contexts.get("MetaAgent")
+    assert ctx is not None
+    assert ctx.agent_instance_class is None
+    assert ctx.agent_class_spec == "fake:Spec"
+
+    sentinel = object()
+    monkeypatch.setattr(connect_mod, "create_wrapped_agent", lambda cls: sentinel)
+
+    result = await connect_mod._build_local_agent(ctx)
+
+    assert result is sentinel
+    assert ctx.agent_instance_class is DummyAgent
+
+
+@pytest.mark.asyncio
+async def test_initialize_client_retries():
+    rc = RemoteConnections()
+
+    # create a context with agent_task truthy to trigger retries
+    ctx = connect_mod.AgentContext(name="RetryAgent")
+    ctx.agent_task = True
+
+    class FlakyClient:
+        def __init__(self):
+            self.attempts = 0
+            self.agent_card = None
+
+        async def ensure_initialized(self):
+            self.attempts += 1
+            # fail twice then succeed
+            if self.attempts < 3:
+                raise RuntimeError("temporary failure")
+            self.agent_card = AgentCard.model_validate(
+                {
+                    "name": "X",
+                    "url": "http://x/",
+                    "description": "x",
+                    "capabilities": {"streaming": True, "push_notifications": False},
+                    "default_input_modes": [],
+                    "default_output_modes": [],
+                    "version": "",
+                    "skills": [],
+                }
+            )
+
+    client = FlakyClient()
+
+    # Call private initializer directly to exercise retry logic
+    await rc._initialize_client(client, ctx)
+
+    assert client.attempts >= 3
+    assert client.agent_card is not None
+
+
+def test_resolve_local_agent_class_empty_spec_returns_none():
+    # Use the synchronous resolver helper for direct, non-async assertions
+    assert connect_mod._resolve_local_agent_class_sync("") is None
+
+
+def test_resolve_local_agent_class_cache_hit():
+    spec = "cached:Spec"
+    sentinel = object()
+    connect_mod._LOCAL_AGENT_CLASS_CACHE[spec] = sentinel
+    try:
+        # Call the synchronous resolver to verify cache hit
+        assert connect_mod._resolve_local_agent_class_sync(spec) is sentinel
+    finally:
+        connect_mod._LOCAL_AGENT_CLASS_CACHE.pop(spec, None)
+
+
+def test_resolve_local_agent_class_invalid_spec():
+    spec = "valuecell.nonexistent:Missing"
+    # Use synchronous resolver helper for direct check
+    result = connect_mod._resolve_local_agent_class_sync(spec)
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_resolve_local_agent_class_async_cache_hit():
+    spec = "cached:Spec"
+    sentinel = object()
+    connect_mod._LOCAL_AGENT_CLASS_CACHE[spec] = sentinel
+    try:
+        # Call the async resolver to verify cache hit
+        result = await connect_mod._resolve_local_agent_class(spec)
+        assert result is sentinel
+    finally:
+        connect_mod._LOCAL_AGENT_CLASS_CACHE.pop(spec, None)
+
+
+@pytest.mark.asyncio
+async def test_resolve_local_agent_class_async_import_failure(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    spec = "valuecell.agents.prompt_strategy_agent.core:PromptBasedStrategyAgent"
+    # Clear cache to ensure we hit the import path
+    connect_mod._LOCAL_AGENT_CLASS_CACHE.pop(spec, None)
+    try:
+        # Mock the sync resolver to raise an exception
+        def failing_resolver(spec_arg):
+            raise ImportError("Simulated import failure")
+
+        monkeypatch.setattr(
+            connect_mod, "_resolve_local_agent_class_sync", failing_resolver
+        )
+
+        result = await connect_mod._resolve_local_agent_class(spec)
+        assert result is None
+    finally:
+        connect_mod._LOCAL_AGENT_CLASS_CACHE.pop(spec, None)
+
+
+@pytest.mark.asyncio
+async def test_build_local_agent_returns_none_when_no_class():
+    ctx = connect_mod.AgentContext(name="NoClass")
+    ctx.agent_instance_class = None
+    assert await connect_mod._build_local_agent(ctx) is None
+
+
+@pytest.mark.asyncio
+async def test_build_local_agent_invokes_factory(monkeypatch: pytest.MonkeyPatch):
+    ctx = connect_mod.AgentContext(name="WithClass")
+    sentinel = object()
+
+    class DummyAgent:
+        pass
+
+    ctx.agent_instance_class = DummyAgent
+    monkeypatch.setattr(
+        connect_mod,
+        "create_wrapped_agent",
+        lambda cls: sentinel if cls is DummyAgent else None,
+    )
+
+    assert await connect_mod._build_local_agent(ctx) is sentinel
+
+
+@pytest.mark.asyncio
+async def test_build_local_agent_threaded_success(monkeypatch: pytest.MonkeyPatch):
+    """When asyncio.to_thread returns quickly, the threaded path should be used."""
+    spec = "valuecell.agents.prompt_strategy_agent.core:PromptBasedStrategyAgent"
+
+    # Ensure cache is clear for deterministic behavior
+    connect_mod._LOCAL_AGENT_CLASS_CACHE.pop(spec, None)
+
+    async def fake_to_thread(func, arg):
+        # emulate correct threaded resolution
+        return connect_mod._resolve_local_agent_class(arg)
+
+    monkeypatch.setattr(asyncio, "to_thread", fake_to_thread)
+
+    ctx = connect_mod.AgentContext(
+        name="PromptBasedStrategyAgent", agent_class_spec=spec
+    )
+
+    inst = await connect_mod._build_local_agent(ctx)
+
+    assert inst is not None
+    # returned object should be an instance (callable class instance)
+    assert not inspect.isclass(inst)
+
+
+@pytest.mark.asyncio
+async def test_build_local_agent_threaded_timeout_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """If the threaded import times out, code should fall back to sync import."""
+    spec = "valuecell.agents.prompt_strategy_agent.core:PromptBasedStrategyAgent"
+
+    connect_mod._LOCAL_AGENT_CLASS_CACHE.pop(spec, None)
+
+    # Make asyncio.wait_for raise TimeoutError to exercise the except branch
+    original_wait_for = asyncio.wait_for
+
+    def fake_wait_for(awaitable, timeout=None):
+        # If a coroutine/future was passed, ensure it's closed/cancelled so
+        # the test does not leave an un-awaited coroutine (which would emit
+        # a RuntimeWarning). Real asyncio.wait_for would cancel the inner
+        # awaitable on timeout; emulate that behavior here.
+        try:
+            if hasattr(awaitable, "cancel"):
+                try:
+                    awaitable.cancel()
+                except Exception:
+                    pass
+            elif hasattr(awaitable, "close"):
+                try:
+                    awaitable.close()
+                except Exception:
+                    pass
+        finally:
+            raise asyncio.TimeoutError()
+
+    monkeypatch.setattr(asyncio, "wait_for", fake_wait_for)
+
+    # Sync resolver should still succeed
+    ctx = connect_mod.AgentContext(
+        name="PromptBasedStrategyAgent", agent_class_spec=spec
+    )
+
+    try:
+        inst = await connect_mod._build_local_agent(ctx)
+    finally:
+        # restore
+        monkeypatch.setattr(asyncio, "wait_for", original_wait_for)
+
+    assert inst is not None
+    assert not inspect.isclass(inst)
+
+
+@pytest.mark.asyncio
+async def test_ensure_agent_runtime_returns_when_task_running():
+    rc = RemoteConnections()
+    ctx = connect_mod.AgentContext(name="RunningAgent")
+
+    async def never():
+        await asyncio.Event().wait()
+
+    task = asyncio.create_task(never())
+    ctx.agent_task = task
+
+    await rc._ensure_agent_runtime(ctx)
+
+    assert ctx.agent_task is task
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+
+@pytest.mark.asyncio
+async def test_ensure_agent_runtime_finished_task_failure():
+    rc = RemoteConnections()
+    ctx = connect_mod.AgentContext(name="FailedAgent")
+    fut = asyncio.Future()
+    fut.set_exception(RuntimeError("boom"))
+    ctx.agent_task = fut
+
+    with pytest.raises(RuntimeError, match="FailedAgent"):
+        await rc._ensure_agent_runtime(ctx)
+
+    assert ctx.agent_task is None
+    assert ctx.agent_instance is None
+
+
+@pytest.mark.asyncio
+async def test_ensure_agent_runtime_no_factory(monkeypatch: pytest.MonkeyPatch):
+    rc = RemoteConnections()
+    ctx = connect_mod.AgentContext(name="NoFactory")
+
+    async def _noop(_):
+        return None
+
+    monkeypatch.setattr(connect_mod, "_build_local_agent", _noop)
+
+    await rc._ensure_agent_runtime(ctx)
+
+    assert ctx.agent_instance is None
+    assert ctx.agent_task is None
+
+
+@pytest.mark.asyncio
+async def test_ensure_agent_runtime_new_task_failure(monkeypatch: pytest.MonkeyPatch):
+    rc = RemoteConnections()
+    ctx = connect_mod.AgentContext(name="FailingAgent")
+
+    class FailingAgent:
+        async def serve(self):
+            raise RuntimeError("serve failed")
+
+    async def _factory(_):
+        return FailingAgent()
+
+    monkeypatch.setattr(connect_mod, "_build_local_agent", _factory)
+
+    with pytest.raises(RuntimeError, match="FailingAgent"):
+        await rc._ensure_agent_runtime(ctx)
+
+    assert ctx.agent_task is None
+    assert ctx.agent_instance is None
+
+
+@pytest.mark.asyncio
+async def test_cleanup_agent_handles_timeout(monkeypatch: pytest.MonkeyPatch):
+    rc = RemoteConnections()
+    agent_name = "TimeoutAgent"
+    ctx = connect_mod.AgentContext(name=agent_name)
+
+    shutdown_called = False
+
+    class DummyInstance:
+        async def shutdown(self):
+            nonlocal shutdown_called
+            shutdown_called = True
+
+    async def never():
+        await asyncio.Event().wait()
+
+    task = asyncio.create_task(never())
+    ctx.agent_task = task
+    ctx.agent_instance = DummyInstance()
+
+    async def fake_wait_for(task_obj, timeout):
+        raise asyncio.TimeoutError
+
+    monkeypatch.setattr(connect_mod.asyncio, "wait_for", fake_wait_for)
+    rc._contexts[agent_name] = ctx
+
+    await rc._cleanup_agent(agent_name)
+
+    assert shutdown_called
+    assert ctx.agent_task is None
+    assert ctx.agent_instance is None
+    assert task.cancelled()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+
+@pytest.mark.asyncio
+async def test_cleanup_agent_clears_idle_resources():
+    rc = RemoteConnections()
+    agent_name = "IdleAgent"
+    ctx = connect_mod.AgentContext(name=agent_name)
+    ctx.agent_instance = object()
+    listener = asyncio.create_task(asyncio.sleep(0))
+    ctx.listener_task = listener
+    ctx.listener_url = "http://localhost:9999"
+    rc._contexts[agent_name] = ctx
+
+    await rc._cleanup_agent(agent_name)
+
+    assert ctx.agent_instance is None
+    assert ctx.listener_task is None
+    assert ctx.listener_url is None
+    assert listener.cancelled() or listener.done()

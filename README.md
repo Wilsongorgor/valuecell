@@ -22,29 +22,54 @@
     <a href="https://www.facebook.com/people/ValueCell/61581410516790/" target="_blank">
         <img src="https://custom-icon-badges.demolab.com/badge/Facebook-1877F2?logo=facebook-white&logoColor=fff"
             alt="follow on Facebook"></a>
+    <a href="https://www.youtube.com/watch?v=C3tfHyGY9YE" target="_blank">
+        <img src="https://img.shields.io/badge/Watch%20on-YouTube-red?logo=youtube"
+            alt="Watch on YouTube"></a>
 </div>
 
 <div align="center">
   <a href="README.md" style="color: gray;">English</a>
-  <a href="README.zh.md" style="color: gray;">中文（简体）</a>
+  <a href="README.zh.md" style="color: auto;">中文（简体）</a>
   <a href="README.zh_Hant.md" style="color: auto;">中文（繁體）</a>
+  <a href="README.ja.md" style="color: auto;">日本語</a>
 </div>
 
 
 # ValueCell
-ValueCell is a community-driven, multi-agent platform for financial applications.
+ValueCell is a community-driven, multi-agent platform for financial applications. Our mission is to build the world's largest decentralized financial agent community.
 
-It provides a team of TOP investment Agents to help manage your portfolio.
+It provides a team of TOP investment Agents to help you with stock selection, research, tracking, and even trading.
+
+The system keeps all your sensitive information stored locally on your device, ensuring core data security.
+
+Welcome to join our Discord community to share feedback and issues you encounter, and invite more developers to contribute 🔥🔥🔥
+
+>Note: ValueCell team members will never proactively contact community participants. This project is for technical exchange only. Investing involves risk. ⚠️
 
 # Screenshot
+
+[![Watch the video](https://img.youtube.com/vi/C3tfHyGY9YE/maxresdefault.jpg)](https://www.youtube.com/watch?v=C3tfHyGY9YE)
 
 <p align="center">
   <img src="assets/product/homepage.png" style="width: 100%; height: auto;">
 </p>
 
 <p align="center">
-  <img src="assets/product/agent_welcome.png" style="width: 100%; height: auto;">
+  <img src="assets/product/superagent.png" style="width: 100%; height: auto;">
 </p>
+
+<p align="center">
+  <img src="assets/product/AutoTradingAgent.png" style="width: 100%; height: auto;">
+</p>
+
+<p align="center">
+  <img src="assets/product/Model_Configuration.png" style="width: 100%; height: auto;">
+</p>
+
+<p align="center">
+  <img src="assets/product/agent_market.png" style="width: 100%; height: auto;">
+</p>
+
 
 # Key Features
 
@@ -54,58 +79,90 @@ It provides a team of TOP investment Agents to help manage your portfolio.
 
 
 ## Multi-Agent System
-- **Trading Agents**: Agents work for market analysis, sentiment analysis, news analysis, and fundamentals analysis 
-- **AI-Hedge-Fund**: Agents collaborate to provide comprehensive financial insights
-- **SEC Agent**: Provides real-time updates from SEC 
+- **DeepResearch Agent**: Automatically retrieve and analyze fundamental documents to generate accurate data insights and interpretable summaries
+- **Strategy Agent**: Supports multiple crypto assets and multi-strategy smart trading, automatically executing your strategies
+- **News Retrieval Agent**: Supports personalized scheduled news delivery to track key information in real time
 - **Others**: More agents are in planning...
 
 ## Flexible Integrations
-- **Multiple LLM Providers**: Support OpenRouter, OpenAI, Anthropic, Google and Ollama 
+- **Multiple LLM Providers**: Support OpenRouter, SiliconFlow,Azure,Openai-compatible,Google,OpenAI and DeepSeek
 - **Popular Market Data**: Cover US market, Crypto market, Hong Kong market, China market and more
-- **Multi-Agent Framework Compatible**: Support Langchain, Agno by A2A Protocol
+- **Multi-Agent Framework Compatible**: Support Langchain, Agno by A2A Protocol for research and development integration
+- **Exchange Connectivity**: Live routing to OKX and Binance, featuring built-in guardrails
 
 # Quick Start
 
-ValueCell is a Python-based application featuring a comprehensive web interface. Follow this guide to set up and run the application efficiently.
+## New Users
 
-## Prerequisites
+To get started quickly, download the latest ValueCell application for MacOS or Windows from the [Releases page](https://github.com/ValueCell-ai/valuecell/releases) on GitHub. You may also download the application from our official website: [https://valuecell.ai](https://valuecell.ai).
 
-For optimal performance and streamlined development, we recommend installing the following tools:
+After installation, please configure your preferred model provider before using ValueCell for the first time. Refer to the instructions in the application or documentation as needed.
 
-**[uv](https://docs.astral.sh/uv/getting-started/installation/)** - Ultra-fast Python package and project manager built in Rust  
-**[bun](https://github.com/oven-sh/bun#install)** - High-performance JavaScript/TypeScript toolkit with runtime, bundler, test runner, and package manager
+### Live Trading
 
-## Installation
+- Configure AI Models: Add your AI Model API Key through the web interface.
+- Configure Exchanges: Set up Binance/HyperLiquid/OKX/Coinbase... API credentials
+- Create Strategies: Combine AI model with exchange to create custom strategies
+- Monitor & Control: Start/stop traders and monitor performance in real-time
+- Note: Currently only supports contract trading (spot is implemented as 1X contracts), so please ensure your contract account has sufficient balance
 
-1. **Clone the repository**
+#### Supported Exchanges
+
+| Exchange | Notes | Status |
+| --- | --- | --- |
+| **Binance** | Only supports international site [binance.com](binance.com), not US site. Uses USDT-M futures (USDT-margined contracts). Ensure your futures account has sufficient USDT balance. Trading pair format: `BTC/USDT`. Note: Ensure perpetual contract account balance is not 0. When applying for API, add IP whitelist by searching `My IP` in search engine | ✅ Tested |
+| **Hyperliquid** | Only supports USDC as margin currency. Uses your main wallet address + API wallet private key authentication (use [API tab](https://app.hyperliquid.xyz/API) to apply). Market orders are automatically converted to IoC limit orders. Trading pair format must be manually adjusted to `SYMBOL/USDC` (e.g., `WIF/USDC`). Configure with main wallet address + API wallet private key. Minimum 10U per trade | ✅ Tested |
+| **OKX** | Requires API Key, Secret, and Passphrase (OKX account password) for authentication. Supports USDT-margined contracts. Trading pair format: `BTC/USDT` | ✅ Tested |
+| Coinbase | Supports USDT-margined contracts. Coinbase International is not yet supported | 🟡 Partially Tested |
+| Gate.io | Supports USDT-margined contracts. Requires API Key and Secret | 🟡 Partially Tested |
+| MEXC | Supports USDT-margined contracts. Requires API Key and Secret | 🟡 Partially Tested |
+| Blockchain | Supports USDT-margined contracts. Requires API Key, Secret | 🟡 Partially Tested |
+
+**Legend**:
+- ✅ **Tested**: Fully tested and verified in production environment
+- 🟡 **Partially Tested**: Code implementation complete but not fully tested, may require debugging
+- **Recommended**: Prioritize using fully tested exchanges (Binance, Hyperliquid, OKX)
+
+### Notice
+- Currently supports leverage trading only, so you need to ensure your Perps account has sufficient balance.
+- You must keep your API secrets secure to avoid losing funds. The app stores secrets locally on your device and will not send them to any third party over the internet.
+- To ensure your account safety, you need to reset your API keys regularly. 
+
+---
+
+**Note**: Before running the application, ensure all prerequisites are installed and environment variables are properly configured. If it has been a long time since the last update, you can delete local data stores and start fresh:
+- LanceDB directory (stored in your system application directory, same path as `.env`):
+  - macOS: `~/Library/Application Support/ValueCell/lancedb`
+  - Linux: `~/.config/valuecell/lancedb`
+  - Windows: `%APPDATA%\\ValueCell\\lancedb`
+- Knowledge directory (stored in your system application directory, same path as `.env`):
+  - macOS: `~/Library/Application Support/ValueCell/.knowledge`
+  - Linux: `~/.config/valuecell/.knowledge`
+  - Windows: `%APPDATA%\\ValueCell\\.knowledge`
+- SQLite database file (stored in your system application directory, same path as `.env`):
+  - macOS: `~/Library/Application Support/ValueCell/valuecell.db`
+  - Linux: `~/.config/valuecell/valuecell.db`
+  - Windows: `%APPDATA%\\ValueCell\\valuecell.db`
+
+
+## Developers
+
+We sincerely invite all developers to join our Discord discussion group, where we regularly share the community roadmap and upcoming contributor benefit plans.
+
+Details on development processes and standards are provided below:[CONTRIBUTING.md](.github/CONTRIBUTING.md)
+
+ValueCell is a Python-based application with a comprehensive web interface, supporting multi-platform deployment. Follow the configuration below to get started quickly.
+
+## Clone Repository
 
    ```bash
    git clone https://github.com/ValueCell-ai/valuecell.git
    cd valuecell
    ```
 
-2. **Configure environment variables**
-
-   ```bash
-   cp .env.example .env
-   ```
-   
-   Edit the `.env` file with your API keys and preferences. This configuration file is shared across all agents.
-
-## Configuration
-
-### Model Providers
-Configure your preferred model providers by editing the ⁠`.env` file:
-
-- **Primary Support**: [OpenRouter](https://openrouter.ai) - Currently the main supported provider for most agents
-- **TradingAgents** requires the use of Memory. If you use OpenRouter as API key, configuring the Embedding model parameters will be needed (since OpenRouter does not support Embedding models). Please refer to the TradingAgents/.env.example file and copy its configuration into the .env file located in the root directory.
-  
-
-Choose your preferred models and providers based on your requirements and preferences.
-
 ## Running the Application
 
-Launch the complete application stack (frontend, backend, and agents):
+Launch the complete application (frontend, backend, and agents):
 
 ### Linux / Macos
 ```bash
@@ -117,26 +174,29 @@ bash start.sh
 .\start.ps1
 ```
 
-## Accessing the Interface
+### Accessing the Interface
 
 - **Web UI**: Navigate to [http://localhost:1420](http://localhost:1420) in your browser
-- **Logs**: Monitor application logs at `logs/{timestamp}/*.log` for detailed runtime information of backend services and individual agents
+- **Logs**: View application logs directly in the terminal for detailed runtime information of backend services and individual agents
 
-## Next Steps
+### Next Steps
 
 Once the application is running, you can explore the web interface to interact with ValueCell's features and capabilities.
 
----
+### Configuration
 
-**Note**: Ensure all prerequisites are installed and environment variables are properly configured before running the application.
-
+More detailed configuration information can be found at [CONFIGURATION_GUIDE](./docs/CONFIGURATION_GUIDE.md)
 
 # Roadmap
 
 ## 🤖 Enhanced Agent Capabilities
+### Trading Capabilities
+- **Crypto**: Supports OKX、Binance and Hyperliquid exchanges, with more exchanges planned for integration...
+- **Securities**: Gradually support AI securities trading
+
 ### Market Expansion
 - **European Markets**: Add support for FTSE, DAX, CAC 40, and other European exchanges
-- **Asian Markets**: Expand coverage to Nikkei, Hang Seng, Shanghai Composite, and emerging Asian markets
+- **Asian Markets**: Expand coverage to Nikkei and emerging Asian markets
 - **Commodity Markets**: Oil, Gold, Silver, Agricultural products analysis
 - **Forex Markets**: Major currency pairs and cross-currency analysis
 
@@ -150,9 +210,13 @@ Once the application is running, you can explore the web interface to interact w
 - **Scheduled Reports**: Daily/weekly/monthly portfolio summaries
 - **Event-driven Notifications**: Earnings releases, dividend announcements, regulatory changes
 - **Custom Triggers**: User-defined conditions and thresholds
-- **Multi-channel Delivery**: Email, SMS, Slack, Discord, and webhook integrations
+- **Multi-channel Delivery**: Discord and webhook integrations
 
 ## ⚙️ Product Configuration & Personalization
+### Multi-platform Products
+- **Desktop Support**: Gradually support desktop and client capabilities
+- **Database Hot Updates**: Gradually support compatibility upgrades
+
 ### Internationalization (i18n)
 - **Multi-language Support**: English, Chinese (Simplified/Traditional), Japanese, Korean, Spanish, French
 - **Localized Market Data**: Region-specific financial terminology and formats
@@ -162,8 +226,6 @@ Once the application is running, you can explore the web interface to interact w
 ### Token & Authentication Management
 - **API Key Management**: Secure storage and rotation of third-party API keys
 - **OAuth Integration**: Support for major financial data providers
-- **Rate Limiting**: Intelligent request throttling and quota management
-- **Multi-tenant Architecture**: Enterprise-grade user isolation and security
 
 ### User Preferences & Customization
 - **Investment Profile**: Risk tolerance, investment horizon, and strategy preferences
@@ -180,20 +242,32 @@ Once the application is running, you can explore the web interface to interact w
 ## 🔧 ValueCell SDK Development
 ### Core SDK Features
 - **Python SDK**: Comprehensive library for agent integration and customization
-- **REST API Wrapper**: Simplified HTTP client with automatic authentication
 - **WebSocket Support**: Real-time data streaming and bidirectional communication
 
 ### Agent Integration Framework
 - **Plugin Architecture**: Easy integration of third-party agents and tools
 - **Agent Registry**: Marketplace for community-contributed agents
-- **Custom Agent Builder**: Low-code/no-code agent creation tools
-- **Agent Orchestration**: Workflow management and agent coordination
 
 ### Developer Tools & Documentation
 - **Interactive API Explorer**: Swagger/OpenAPI documentation with live testing
 - **Code Examples**: Sample implementations in multiple programming languages
 - **Testing Framework**: Unit tests, integration tests, and mock data providers
 
+# LICENSE
+
+This project is licensed under the **Apache License 2.0** — see the [LICENSE](./LICENSE) file for details.
+
+> 📌 Note: Apache 2.0 applies **only to original code authored by the ValueCell team and contributors**. Third-party components (e.g., APIs, widgets, libraries) are governed by their own licenses and terms — see below.
+
+## Third-Party Components & Licensing
+
+ValueCell integrates external services and embeds third-party widgets. Their usage is **not covered by Apache 2.0**, and compliance with their terms is your responsibility as a user/developer.
+
+| Component | Type | License / Terms |
+|---------|------|-----------------|
+| **TradingView Advanced Chart** | Embedded iframe widget | [Free Advanced Charts Agreement](https://www.tradingview.com/chart-embedding/) (proprietary) |
+| **Exchange APIs** (Binance, OKX, Hyperliquid, etc.) | REST/WebSocket endpoints | Each exchange’s ToS (e.g., [Binance API Terms](https://www.binance.com/en/terms)) |
+| **LLM Providers** (OpenAI, Azure, Google, DeepSeek, etc.) | Inference APIs | Provider-specific ToS (e.g., [OpenAI ToS](https://openai.com/policies/terms-of-use)) |
 
 # Star History
 

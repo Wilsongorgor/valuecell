@@ -56,13 +56,93 @@ def detect_browser_language(accept_language_header: str) -> str:
         if lang in SUPPORTED_LANGUAGE_CODES:
             return lang
 
-        # Try to match language family (e.g., 'zh' -> 'zh-Hans')
-        lang_family = lang.split("-")[0]
-        for supported_lang in SUPPORTED_LANGUAGE_CODES:
-            if supported_lang.startswith(lang_family):
-                return supported_lang
+        # Handle browser locales to internal locale mapping
+        # TradingView locale codes (internal) are: en, zh_CN, zh_TW, ja, etc.
+        # Browser locales typically look like: en-US, zh-CN, zh-TW, ja-JP
+
+        # 1. Exact map for common variations
+        if lang == "zh-CN" or lang == "zh-Hans":
+            if "zh_CN" in SUPPORTED_LANGUAGE_CODES:
+                return "zh_CN"
+        if lang == "zh-TW" or lang == "zh-HK" or lang == "zh-Hant":
+            if "zh_TW" in SUPPORTED_LANGUAGE_CODES:
+                return "zh_TW"
+        if lang.startswith("ja"):
+            if "ja" in SUPPORTED_LANGUAGE_CODES:
+                return "ja"
+        if lang.startswith("en"):
+            if "en" in SUPPORTED_LANGUAGE_CODES:
+                return "en"
 
     return DEFAULT_LANGUAGE
+
+
+def detect_user_region(client_ip: Optional[str] = None) -> str:
+    """Detect user region based on IP geolocation.
+
+    Args:
+        client_ip: Optional client IP address. If None, uses server's IP for detection.
+
+    Returns:
+        Region code: 'cn' for China mainland, 'default' for others
+    """
+
+    try:
+        import httpx
+
+        with httpx.Client(timeout=3.0) as client:
+            # Use client IP if provided, otherwise detect server's IP
+            url = (
+                f"https://ipapi.co/{client_ip}/json/"
+                if client_ip
+                else "https://ipapi.co/json/"
+            )
+            resp = client.get(url)
+            if resp.status_code == 200:
+                data = resp.json()
+                country_code = data.get("country_code", "").upper()
+
+                # China mainland
+                if country_code == "CN":
+                    return "cn"
+
+                return "default"
+            return "default"
+    except Exception:
+        # If detection fails, return default
+        return "default"
+
+
+async def detect_user_region_async(client_ip: Optional[str] = None) -> str:
+    """Async version of detect_user_region for use in FastAPI routes.
+
+    Args:
+        client_ip: Optional client IP address. If None, uses server's IP for detection.
+
+    Returns:
+        Region code: 'cn' for China mainland, 'default' for others
+    """
+    try:
+        import httpx
+
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            url = (
+                f"https://ipapi.co/{client_ip}/json/"
+                if client_ip
+                else "https://ipapi.co/json/"
+            )
+            resp = await client.get(url)
+            if resp.status_code == 200:
+                data = resp.json()
+                country_code = data.get("country_code", "").upper()
+
+                if country_code == "CN":
+                    return "cn"
+
+                return "default"
+            return "default"
+    except Exception:
+        return "default"
 
 
 def get_timezone_for_language(language: str) -> str:

@@ -1,36 +1,38 @@
-import { BarChart3, TrendingUp } from "lucide-react";
 import type { AgentSuggestion } from "@/app/home/components/agent-suggestions-list";
-import { IconGroupPng, TrendPng } from "@/assets/png";
+import { IconGroupPng, MessageGroupPng, TrendPng } from "@/assets/png";
+import { AutoTrade, NewsPush, ResearchReport } from "@/assets/svg";
+import SvgIcon from "@/components/valuecell/icon/svg-icon";
 
 export const agentSuggestions: AgentSuggestion[] = [
   {
     id: "ResearchAgent",
-    title: "Research Report",
-    icon: <TrendingUp size={16} className="text-gray-500" />,
+    title: "Deep Research",
+    icon: <SvgIcon name={ResearchReport} />,
     description:
-      "analyzes SEC filings and internal knowledge to produce sourceable",
+      "Analyze SEC filings to generate in-depth stock interpretation reports.",
     bgColor:
       "bg-gradient-to-r from-[#FFFFFF]/70 from-[5.05%] to-[#E7EFFF]/70 to-[100%]",
+    decorativeGraphics: <img src={IconGroupPng} alt="IconGroup" />,
+  },
+  {
+    id: "StrategyAgent",
+    title: "Automated Trading",
+    icon: <SvgIcon name={AutoTrade} />,
+    description:
+      "Multi-strategy smart trading, automatically execute your strategies",
+    bgColor:
+      "bg-gradient-to-r from-[#FFFFFF]/70 from-[5.05%] to-[#EAE8FF]/70 to-[100%]",
     decorativeGraphics: <img src={TrendPng} alt="Trend" />,
   },
   {
-    id: "AutoTradingAgent",
-    title: "Auto Trading",
-    icon: <BarChart3 size={16} className="text-gray-500" />,
-    description: "multiple crypto assets and AI-powered trading strategies",
+    id: "NewsAgent",
+    title: "Pushing News",
+    icon: <SvgIcon name={NewsPush} />,
+    description: "Personalized news updates on a custom schedule",
     bgColor:
-      "bg-gradient-to-r from-[#FFFFFF]/70 from-[5.05%] to-[#EAE8FF]/70 to-[100%]",
-    decorativeGraphics: <img src={IconGroupPng} alt="IconGroup" />,
+      "bg-gradient-to-r from-[#FFFFFF]/70 from-[5.05%] to-[#FFE7FD]/70 to-[100%]",
+    decorativeGraphics: <img src={MessageGroupPng} alt="MessageGroup" />,
   },
-  // {
-  //   id: "SECAgent",
-  //   title: "Selection SEC",
-  //   icon: <Target size={16} className="text-gray-500" />,
-  //   description: "SEC Stock Information Query",
-  //   bgColor:
-  //     "bg-gradient-to-r from-[#FFFFFF]/70 from-[5.05%] to-[#FFE7FD]/70 to-[100%]",
-  //   decorativeGraphics: <img src={MessageGroupPng} alt="MessageGroup" />,
-  // },
 ];
 
 /**

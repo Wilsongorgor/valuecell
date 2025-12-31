@@ -1,9 +1,14 @@
+import json
 from datetime import datetime
 from typing import List, Optional
 
+from loguru import logger
+
 from valuecell.core.types import (
+    ComponentType,
     ConversationItem,
     ConversationItemEvent,
+    ResponseMetadata,
     ResponsePayload,
     Role,
 )
@@ -35,12 +40,14 @@ class ConversationManager:
         user_id: str,
         title: Optional[str] = None,
         conversation_id: Optional[str] = None,
+        agent_name: Optional[str] = None,
     ) -> Conversation:
         """Create new conversation"""
         conversation = Conversation(
             conversation_id=conversation_id or generate_conversation_id(),
             user_id=user_id,
             title=title,
+            agent_name=agent_name,
         )
         await self.conversation_store.save_conversation(conversation)
         return conversation
@@ -79,9 +86,10 @@ class ConversationManager:
         conversation_id: str,
         thread_id: Optional[str] = None,
         task_id: Optional[str] = None,
-        payload: ResponsePayload = None,
+        payload: Optional[ResponsePayload] = None,
         item_id: Optional[str] = None,
         agent_name: Optional[str] = None,
+        metadata: Optional[ResponseMetadata] = None,
     ) -> Optional[ConversationItem]:
         """Add item to conversation
 
@@ -93,6 +101,8 @@ class ConversationManager:
             task_id: Associated task ID (optional)
             payload: Item payload
             item_id: Item ID (optional)
+            agent_name: Agent name (optional)
+            metadata: Additional metadata as dict (optional)
         """
         # Verify conversation exists
         conversation = await self.get_conversation(conversation_id)
@@ -112,6 +122,15 @@ class ConversationManager:
                 except Exception:
                     payload_str = None
 
+        # Serialize metadata to JSON string
+        metadata_str = None
+        if metadata is not None:
+            try:
+                metadata_str = json.dumps(metadata, default=str)
+            except Exception:
+                metadata_str = "{}"
+        metadata_str = metadata_str or "{}"
+
         item = ConversationItem(
             item_id=item_id or generate_item_id(),
             role=role,
@@ -121,6 +140,7 @@ class ConversationManager:
             task_id=task_id,
             payload=payload_str,
             agent_name=agent_name,
+            metadata=metadata_str,
         )
 
         # Save item directly to item store
@@ -137,17 +157,24 @@ class ConversationManager:
         conversation_id: Optional[str] = None,
         event: Optional[ConversationItemEvent] = None,
         component_type: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
     ) -> List[ConversationItem]:
         """Get items for a conversation with optional filtering and pagination
 
         Args:
             conversation_id: Conversation ID
-            limit: Maximum number of items to return
-            offset: Number of items to skip
-            role: Filter by specific role (optional)
+            event: Filter by specific event (optional)
+            component_type: Filter by component type (optional)
+            limit: Maximum number of items to return (optional, default: all)
+            offset: Number of items to skip (optional, default: 0)
         """
         return await self.item_store.get_items(
-            conversation_id=conversation_id, event=event, component_type=component_type
+            conversation_id=conversation_id,
+            event=event,
+            component_type=component_type,
+            limit=limit,
+            offset=offset or 0,
         )
 
     async def get_latest_item(self, conversation_id: str) -> Optional[ConversationItem]:
@@ -205,6 +232,59 @@ class ConversationManager:
         return await self.set_conversation_status(
             conversation_id, ConversationStatus.REQUIRE_USER_INPUT
         )
+
+    async def update_task_component_status(
+        self,
+        task_id: str,
+        status: str,
+        error_reason: Optional[str] = None,
+    ) -> None:
+        """Update persisted scheduled task controller component's status and error reason.
+
+        For a given task_id, find the persisted conversation item with
+        component_type='scheduled_task_controller', update its payload's
+        task_status field, and set error_reason in metadata if provided.
+
+        Args:
+            task_id: The task identifier to search for.
+            status: New task status value (e.g., 'failed').
+            error_reason: Optional error details to store in metadata.
+        """
+        items = await self.item_store.get_items(task_id=task_id)
+        for item in items:
+            # Check if this is a scheduled_task_controller component
+            if not item.payload:
+                continue
+            try:
+                payload_obj = json.loads(item.payload)
+                if (
+                    payload_obj.get("component_type")
+                    != ComponentType.SCHEDULED_TASK_CONTROLLER
+                ):
+                    continue
+            except Exception:
+                continue
+
+            # Update task_status in payload and error_reason in metadata
+            try:
+                payload_obj = json.loads(item.payload)
+                content = payload_obj.get("content") or "{}"
+                content_obj = json.loads(content)
+                content_obj["task_status"] = status
+                payload_obj["content"] = json.dumps(content_obj)
+                item.payload = json.dumps(payload_obj)
+
+                # Update metadata with error reason if provided
+                metadata_obj = json.loads(item.metadata or "{}")
+                if error_reason:
+                    metadata_obj["error_reason"] = error_reason
+                item.metadata = json.dumps(metadata_obj, default=str)
+
+                await self.item_store.save_item(item)
+            except Exception as e:
+                logger.warning(
+                    f"Failed to update task component status for task {task_id}: {e}"
+                )
 
     async def get_conversations_by_status(
         self,

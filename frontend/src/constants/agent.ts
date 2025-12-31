@@ -8,34 +8,35 @@ import {
   FundamentalProxyPng,
   MichaelBurryPng,
   MohnishPabraiPng,
+  NewPushAgentPng,
   PeterLynchPng,
   PhilFisherPng,
   PortfolioManagerPng,
   RakeshJhunjhunwalaPng,
+  ResearchAgentPng,
   SecAgentPng,
   StanleyDruckenmillerPng,
+  StrategyAgentPng,
   TechnicalAgencyPng,
   ValuationAgencyPng,
+  ValueCellAgentPng,
   WarrenBuffettPng,
 } from "@/assets/png";
 import {
   ChatConversationRenderer,
   MarkdownRenderer,
-  ModelTradeRenderer,
-  ModelTradeTableRenderer,
+  ReasoningRenderer,
   ReportRenderer,
-  SecFeedRenderer,
+  ScheduledTaskControllerRenderer,
+  ScheduledTaskRenderer,
   ToolCallRenderer,
 } from "@/components/valuecell/renderer";
+import { TimeUtils } from "@/lib/time";
 import type { AgentComponentType, AgentInfo } from "@/types/agent";
 import type { RendererComponent } from "@/types/renderer";
 
 // component_type to section type
-export const AGENT_SECTION_COMPONENT_TYPE = [
-  "sec_feed",
-  "filtered_line_chart",
-  "filtered_card_push_notification",
-] as const;
+export const AGENT_SECTION_COMPONENT_TYPE = ["scheduled_task_result"] as const;
 
 // multi section component type
 export const AGENT_MULTI_SECTION_COMPONENT_TYPE = ["report"] as const;
@@ -43,8 +44,10 @@ export const AGENT_MULTI_SECTION_COMPONENT_TYPE = ["report"] as const;
 // agent component type
 export const AGENT_COMPONENT_TYPE = [
   "markdown",
+  "reasoning",
   "tool_call",
   "subagent_conversation",
+  "scheduled_task_controller",
   ...AGENT_SECTION_COMPONENT_TYPE,
   ...AGENT_MULTI_SECTION_COMPONENT_TYPE,
 ] as const;
@@ -55,10 +58,10 @@ export const AGENT_COMPONENT_TYPE = [
 export const COMPONENT_RENDERER_MAP: {
   [K in AgentComponentType]: RendererComponent<K>;
 } = {
-  sec_feed: SecFeedRenderer,
-  filtered_line_chart: ModelTradeRenderer,
-  filtered_card_push_notification: ModelTradeTableRenderer,
+  scheduled_task_result: ScheduledTaskRenderer,
+  scheduled_task_controller: ScheduledTaskControllerRenderer,
   report: ReportRenderer,
+  reasoning: ReasoningRenderer,
   markdown: MarkdownRenderer,
   tool_call: ToolCallRenderer,
   subagent_conversation: ChatConversationRenderer,
@@ -66,6 +69,8 @@ export const COMPONENT_RENDERER_MAP: {
 
 export const AGENT_AVATAR_MAP: Record<string, string> = {
   // Investment Masters
+  ResearchAgent: ResearchAgentPng,
+  StrategyAgent: StrategyAgentPng,
   AswathDamodaranAgent: AswathDamodaranPng,
   BenGrahamAgent: BenGrahamPng,
   BillAckmanAgent: BillAckmanPng,
@@ -78,6 +83,7 @@ export const AGENT_AVATAR_MAP: Record<string, string> = {
   RakeshJhunjhunwalaAgent: RakeshJhunjhunwalaPng,
   StanleyDruckenmillerAgent: StanleyDruckenmillerPng,
   WarrenBuffettAgent: WarrenBuffettPng,
+  ValueCellAgent: ValueCellAgentPng,
 
   // Analyst Agents
   FundamentalsAnalystAgent: FundamentalProxyPng,
@@ -88,6 +94,7 @@ export const AGENT_AVATAR_MAP: Record<string, string> = {
   // System Agents
   TradingAgents: PortfolioManagerPng,
   SECAgent: SecAgentPng,
+  NewsAgent: NewPushAgentPng,
 };
 
 export const VALUECELL_AGENT: AgentInfo = {
@@ -96,11 +103,20 @@ export const VALUECELL_AGENT: AgentInfo = {
   enabled: true,
   description:
     "ValueCell Agent is a super-agent that can help you manage different agents and tasks",
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
+  created_at: TimeUtils.nowUTC().toISOString(),
+  updated_at: TimeUtils.nowUTC().toISOString(),
   agent_metadata: {
     version: "1.0.0",
     author: "ValueCell",
     tags: ["valuecell", "super-agent"],
   },
 };
+
+// Trading symbols options
+export const TRADING_SYMBOLS: string[] = [
+  "BTC/USDT",
+  "ETH/USDT",
+  "SOL/USDT",
+  "DOGE/USDT",
+  "XRP/USDT",
+];

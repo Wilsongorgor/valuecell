@@ -9,7 +9,6 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import type { ToolCallRendererProps } from "@/types/renderer";
-import styles from "./index.module.css";
 import MarkdownRenderer from "./markdown-renderer";
 
 const ToolCallRenderer: FC<ToolCallRendererProps> = ({ content }) => {
@@ -21,7 +20,7 @@ const ToolCallRenderer: FC<ToolCallRendererProps> = ({ content }) => {
     <Collapsible
       open={isOpen}
       onOpenChange={setIsOpen}
-      className={cn("min-w-96 rounded-xl p-3", styles["border-gradient"])}
+      className={cn("min-w-96 rounded-lg border-gradient p-3")}
       data-active={isOpen}
     >
       <CollapsibleTrigger
@@ -31,7 +30,7 @@ const ToolCallRenderer: FC<ToolCallRendererProps> = ({ content }) => {
         )}
         disabled={!tool_result}
       >
-        <div className="flex items-center gap-2 text-gray-950">
+        <div className="flex items-center gap-2 text-foreground">
           {tool_result ? (
             <Search className="size-5" />
           ) : (
@@ -42,7 +41,7 @@ const ToolCallRenderer: FC<ToolCallRendererProps> = ({ content }) => {
         {tool_result_array && (
           <ChevronDown
             className={cn(
-              "h-6 w-6 text-gray-950 transition-transform",
+              "h-6 w-6 text-muted-foreground transition-transform",
               isOpen && "rotate-180",
             )}
           />

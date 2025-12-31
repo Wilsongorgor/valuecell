@@ -13,56 +13,38 @@ export interface Stock {
   exchange: string;
 }
 
+export type StockCurrency = "USD" | "CNY" | "HKD";
+
 export interface StockPrice {
   ticker: string;
+  price: number;
   price_formatted: string;
   timestamp: string;
   change: number;
-  change_percent_formatted: string;
+  change_percent?: number;
   market_cap_formatted: string;
   source: string;
+  currency: StockCurrency;
 }
 
+/**
+ * Standard interval format for historical data
+ * Format: <number><unit>
+ * Examples: "1m", "5m", "15m", "30m", "60m", "1h", "1d", "1w", "1mo"
+ */
+export type StockInterval =
+  | "1m" // 1 minute
+  | "1h" // 1 hour
+  | "1d" // 1 day (default)
+  | "1w"; // 1 week
+
 export interface StockHistory {
-  ticker: string;
-  interval: "m" | "h" | "d" | "w" | "mo" | "y";
-  prices: {
-    ticker: string;
-    price: number;
-    timestamp: string;
-    open_price: number;
-    high_price: number;
-    low_price: number;
-    close_price: number;
-    volume: number;
-    change: number;
-    change_percent: number;
-    currency: string;
-    source: string;
-  }[];
+  time: string;
+  price: number;
 }
 
 export interface StockDetail {
-  ticker: string;
-  asset_type: "stock" | "etf" | "index" | "crypto";
-  asset_type_display: string;
-  names: {
-    "en-US": string;
-    "en-GB": string;
-    "zh-Hans": string;
-    "zh-Hant": string;
-  };
   display_name: string;
-  descriptions: Record<string, string>;
-  market_info: {
-    exchange: string;
-    country: string;
-    currency: string;
-    timezone: string;
-    trading_hours: string | null;
-    market_status: string;
-  };
-  source_mappings: Record<string, string>;
   properties: {
     sector: string;
     industry: string;
@@ -73,7 +55,4 @@ export interface StockDetail {
     website: string;
     business_summary: string;
   };
-  created_at: string;
-  updated_at: string;
-  is_active: boolean;
 }
